@@ -75,4 +75,4 @@ Reference: specs/agent/agent-architecture.md, specs/decisions/technology-choices
 
 ## Relevant Commits
 
-- `pending` — feat(task-010): agent architecture — instantiation, message loop, observability
+- `861e5c7` — feat(task-010): agent architecture — instantiation, message loop, observability
