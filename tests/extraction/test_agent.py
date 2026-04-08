@@ -13,7 +13,9 @@ from claude_agent_sdk import (
     AssistantMessage,
     ResultMessage,
     TextBlock,
+    ToolResultBlock,
     ToolUseBlock,
+    UserMessage,
 )
 
 from k_extract.extraction.agent import (
@@ -21,6 +23,7 @@ from k_extract.extraction.agent import (
     UsageStats,
     _get_int,
     _handle_assistant_message,
+    _handle_user_message,
     format_worker_id,
     run_agent,
 )
@@ -312,6 +315,125 @@ class TestHandleAssistantMessage:
 
 
 # ------------------------------------------------------------------ #
+# _handle_user_message tests
+# ------------------------------------------------------------------ #
+
+
+class TestHandleUserMessage:
+    def test_no_logging_without_conv_logger(self) -> None:
+        msg = UserMessage(
+            content=[
+                ToolResultBlock(
+                    tool_use_id="tu-1", content="Entity created", is_error=False
+                )
+            ],
+        )
+        # Should not raise
+        _handle_user_message(msg, conv_logger=None)
+
+    def test_logs_tool_result_block(self, tmp_path: Path) -> None:
+        conv_logger = ConversationLogger(tmp_path, "01")
+        msg = UserMessage(
+            content=[
+                ToolResultBlock(
+                    tool_use_id="tu-1",
+                    content="Entity created: repo:test",
+                    is_error=False,
+                )
+            ],
+        )
+        _handle_user_message(msg, conv_logger=conv_logger)
+        conv_logger.close()
+
+        lines = (tmp_path / "worker-01.jsonl").read_text().strip().split("\n")
+        assert len(lines) == 1
+        entry = json.loads(lines[0])
+        assert entry["type"] == "tool_result"
+        assert entry["tool_use_id"] == "tu-1"
+        assert entry["content"] == "Entity created: repo:test"
+        assert entry["is_error"] is False
+
+    def test_logs_tool_result_error(self, tmp_path: Path) -> None:
+        conv_logger = ConversationLogger(tmp_path, "01")
+        msg = UserMessage(
+            content=[
+                ToolResultBlock(
+                    tool_use_id="tu-err",
+                    content="Validation failed: missing slug",
+                    is_error=True,
+                )
+            ],
+        )
+        _handle_user_message(msg, conv_logger=conv_logger)
+        conv_logger.close()
+
+        lines = (tmp_path / "worker-01.jsonl").read_text().strip().split("\n")
+        entry = json.loads(lines[0])
+        assert entry["type"] == "tool_result"
+        assert entry["is_error"] is True
+
+    def test_logs_string_content(self, tmp_path: Path) -> None:
+        """UserMessage with string content is logged as user_text."""
+        conv_logger = ConversationLogger(tmp_path, "01")
+        msg = UserMessage(content="Process these files.")
+        _handle_user_message(msg, conv_logger=conv_logger)
+        conv_logger.close()
+
+        lines = (tmp_path / "worker-01.jsonl").read_text().strip().split("\n")
+        assert len(lines) == 1
+        entry = json.loads(lines[0])
+        assert entry["type"] == "user_text"
+        assert entry["text"] == "Process these files."
+
+    def test_logs_text_block_in_content_list(self, tmp_path: Path) -> None:
+        """TextBlock in UserMessage content list is logged as user_text."""
+        conv_logger = ConversationLogger(tmp_path, "01")
+        msg = UserMessage(
+            content=[TextBlock(text="Some user text")],
+        )
+        _handle_user_message(msg, conv_logger=conv_logger)
+        conv_logger.close()
+
+        lines = (tmp_path / "worker-01.jsonl").read_text().strip().split("\n")
+        entry = json.loads(lines[0])
+        assert entry["type"] == "user_text"
+        assert entry["text"] == "Some user text"
+
+    def test_logs_multiple_tool_results(self, tmp_path: Path) -> None:
+        """Multiple ToolResultBlocks are each logged separately."""
+        conv_logger = ConversationLogger(tmp_path, "01")
+        msg = UserMessage(
+            content=[
+                ToolResultBlock(tool_use_id="tu-1", content="Result 1"),
+                ToolResultBlock(tool_use_id="tu-2", content="Result 2"),
+            ],
+        )
+        _handle_user_message(msg, conv_logger=conv_logger)
+        conv_logger.close()
+
+        lines = (tmp_path / "worker-01.jsonl").read_text().strip().split("\n")
+        assert len(lines) == 2
+        assert json.loads(lines[0])["tool_use_id"] == "tu-1"
+        assert json.loads(lines[1])["tool_use_id"] == "tu-2"
+
+    def test_omits_none_fields(self, tmp_path: Path) -> None:
+        """None content and is_error are omitted from the log entry."""
+        conv_logger = ConversationLogger(tmp_path, "01")
+        msg = UserMessage(
+            content=[ToolResultBlock(tool_use_id="tu-1")],
+        )
+        _handle_user_message(msg, conv_logger=conv_logger)
+        conv_logger.close()
+
+        lines = (tmp_path / "worker-01.jsonl").read_text().strip().split("\n")
+        entry = json.loads(lines[0])
+        assert entry["type"] == "tool_result"
+        assert entry["tool_use_id"] == "tu-1"
+        assert "content" not in entry
+        assert "is_error" not in entry
+
+
+# ------------------------------------------------------------------ #
 # ConversationLogger tests
 # ------------------------------------------------------------------ #
 
@@ -583,10 +705,26 @@ class TestRunAgent:
         configure_logging(json_output=True)
 
         assistant_msg = AssistantMessage(
-            content=[TextBlock(text="Processing files...")],
+            content=[
+                TextBlock(text="Processing files..."),
+                ToolUseBlock(
+                    id="tu-1",
+                    name="mcp__extraction-tools__manage_entity",
+                    input={"slug": "repo:test"},
+                ),
+            ],
             model="test-model",
             usage={"input_tokens": 100, "output_tokens": 50},
             message_id="msg-1",
+        )
+        user_msg = UserMessage(
+            content=[
+                ToolResultBlock(
+                    tool_use_id="tu-1",
+                    content="Entity created: repo:test",
+                    is_error=False,
+                )
+            ],
         )
         result_msg = ResultMessage(
             subtype="success",
@@ -606,6 +744,7 @@ class TestRunAgent:
 
         async def mock_receive_messages():
             yield assistant_msg
+            yield user_msg
             yield result_msg
 
         mock_client = AsyncMock()
@@ -634,11 +773,18 @@ class TestRunAgent:
         assert result.usage.cache_read_input_tokens == 40
         assert result.usage.cost_usd == 0.05
 
-        # Conversation log should exist
+        # Conversation log should exist with full conversation
         conv_file = tmp_path / "conv" / "worker-01.jsonl"
         assert conv_file.exists()
         lines = conv_file.read_text().strip().split("\n")
-        assert len(lines) == 2  # assistant_text + result
+        # assistant_text + tool_use + tool_result + result
+        assert len(lines) == 4
+        types = [json.loads(line)["type"] for line in lines]
+        assert types == ["assistant_text", "tool_use", "tool_result", "result"]
+        # Verify tool result content is logged
+        tool_result_entry = json.loads(lines[2])
+        assert tool_result_entry["tool_use_id"] == "tu-1"
+        assert tool_result_entry["content"] == "Entity created: repo:test"
 
     @pytest.mark.asyncio
     async def test_error_flow(self, tmp_path: Path) -> None:

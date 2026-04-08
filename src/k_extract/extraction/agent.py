@@ -20,7 +20,9 @@ from claude_agent_sdk import (
     ClaudeSDKClient,
     ResultMessage,
     TextBlock,
+    ToolResultBlock,
     ToolUseBlock,
+    UserMessage,
 )
 
 from k_extract.extraction.hooks import create_hooks
@@ -199,6 +201,9 @@ async def run_agent(
                         message, usage=usage, conv_logger=conv_logger
                     )
 
+                elif isinstance(message, UserMessage):
+                    _handle_user_message(message, conv_logger=conv_logger)
+
                 elif isinstance(message, ResultMessage):
                     usage.apply_final(message)
 
@@ -285,6 +290,43 @@ def _handle_assistant_message(
                     "message_id": message.message_id,
                 },
             )
+
+
+def _handle_user_message(
+    message: UserMessage,
+    *,
+    conv_logger: ConversationLogger | None,
+) -> None:
+    """Process a UserMessage: log tool result content blocks.
+
+    UserMessage objects carry ToolResultBlock content blocks containing
+    the results of tool executions. These are logged to the conversation
+    JSONL to provide a complete record of tool invocations and their results.
+
+    Args:
+        message: The UserMessage from the SDK.
+        conv_logger: Optional conversation logger for JSONL output.
+    """
+    if conv_logger is None:
+        return
+
+    content = message.content
+    if isinstance(content, str):
+        conv_logger.log_message("user_text", {"text": content})
+        return
+
+    for block in content:
+        if isinstance(block, ToolResultBlock):
+            result_data: dict[str, Any] = {
+                "tool_use_id": block.tool_use_id,
+            }
+            if block.content is not None:
+                result_data["content"] = block.content
+            if block.is_error is not None:
+                result_data["is_error"] = block.is_error
+            conv_logger.log_message("tool_result", result_data)
+        elif isinstance(block, TextBlock):
+            conv_logger.log_message("user_text", {"text": block.text})
 
 
 def _get_int(usage: Any, key: str) -> int:
