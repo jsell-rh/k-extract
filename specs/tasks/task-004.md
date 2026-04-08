@@ -1,6 +1,6 @@
 # Task 004: Output Format — JSONL Mutation Writer and ID Generation
 
-**Status:** `ready-for-review`
+**Status:** `complete`
 **Spec Reference:** specs/process/output-format.md
 **Branch:** task-004
 **PR:** #4
@@ -56,3 +56,4 @@ Reference: specs/process/output-format.md.
 - `7567e4e` — chore(task-004): add PR number
 - `7bc8cb6` — feat(task-004): implement JSONL mutation writer and ID generation
 - `424dc24` — fix(task-004): replace asyncio.Lock with threading.Lock for true thread-safety
+- Merged via PR #4
