@@ -67,4 +67,6 @@ Reference: specs/domain/domain-model.md Section 5 (Ontology Operations), specs/c
 
 ## Relevant Commits
 
-(none yet)
+- `8309def` — chore(task-006): begin implementation
+- `fe4f6f3` — chore(task-006): add PR number
+- `b5d4917` — feat(task-006): implement ontology store with staging and validate-and-commit
