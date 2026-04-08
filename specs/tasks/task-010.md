@@ -1,10 +1,10 @@
 # Task 010: Agent Architecture — Instantiation, Message Loop, and Observability
 
-**Status:** `ready-for-review`
+**Status:** `needs-revision`
 **Spec Reference:** specs/agent/agent-architecture.md, specs/decisions/technology-choices.md (Logging)
 **Branch:** task-010
 **PR:** #10
-**Review:** (none)
+**Review:** specs/reviews/task-010.md
 
 ## Description
 
