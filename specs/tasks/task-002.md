@@ -1,6 +1,6 @@
 # Task 002: Domain Model — Ontology Type Definitions and Instances
 
-**Status:** `ready-for-review`
+**Status:** `complete`
 **Spec Reference:** specs/domain/domain-model.md
 **Branch:** task-002
 **PR:** #2
@@ -68,3 +68,4 @@ Reference: specs/domain/domain-model.md sections 1–5.
 - `2d827de` — fix(task-002): address review round 2 findings
 - `d877abc` — fix(task-002): address review round 3 findings
 - `7950377` — fix(task-002): address review round 4 — entity type cross-check on slug resolution
+- Merged via PR #2
