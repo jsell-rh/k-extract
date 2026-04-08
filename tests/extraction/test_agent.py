@@ -475,7 +475,7 @@ class TestHooks:
         assert result == {}
 
     @pytest.mark.asyncio
-    async def test_stop_hook(self) -> None:
+    async def test_stop_hook(self, capsys: pytest.CaptureFixture[str]) -> None:
         configure_logging(json_output=True)
         usage = UsageStats(
             input_tokens=500,
@@ -501,6 +501,12 @@ class TestHooks:
         }
         result = await hook_fn(input_data, "sess-1", {})
         assert result == {}
+
+        output = capsys.readouterr().out
+        assert "extraction.agent_stopped" in output
+        assert "500" in output  # input_tokens
+        assert "200" in output  # output_tokens
+        assert "0.05" in output  # cost_usd
 
     @pytest.mark.asyncio
     async def test_stop_hook_without_usage(self) -> None:
@@ -709,6 +715,58 @@ class TestRunAgent:
 
         assert result.success is False
         assert result.error_message == "User cancelled"
+
+    @pytest.mark.asyncio
+    async def test_error_flow_conversation_log_includes_error_details(
+        self, tmp_path: Path
+    ) -> None:
+        """Conversation log includes error details for error/cancelled states."""
+        configure_logging(json_output=True)
+
+        result_msg = ResultMessage(
+            subtype="error",
+            duration_ms=1000,
+            duration_api_ms=800,
+            is_error=True,
+            num_turns=1,
+            session_id="sess-1",
+            errors=["Rate limit exceeded", "Retry after 30s"],
+            result="Failed to complete extraction",
+        )
+
+        async def mock_receive_messages():
+            yield result_msg
+
+        mock_client = AsyncMock()
+        mock_client.receive_messages = mock_receive_messages
+
+        with patch("k_extract.extraction.agent.ClaudeSDKClient") as MockClient:
+            MockClient.return_value.__aenter__ = AsyncMock(return_value=mock_client)
+            MockClient.return_value.__aexit__ = AsyncMock(return_value=False)
+
+            conv_dir = tmp_path / "conv"
+            result = await run_agent(
+                worker_id="01",
+                system_prompt="test",
+                initial_message="test",
+                mcp_server=MagicMock(),
+                job_id="job-1",
+                data_source="test-source",
+                cwd=tmp_path,
+                conversation_log_dir=conv_dir,
+            )
+
+        assert result.success is False
+
+        conv_file = conv_dir / "worker-01.jsonl"
+        lines = conv_file.read_text().strip().split("\n")
+        assert len(lines) == 1
+        entry = json.loads(lines[0])
+        assert entry["type"] == "result"
+        assert entry["subtype"] == "error"
+        assert entry["is_error"] is True
+        assert entry["errors"] == ["Rate limit exceeded", "Retry after 30s"]
+        assert entry["result"] == "Failed to complete extraction"
 
     @pytest.mark.asyncio
     async def test_loop_exit_no_subtype(self, tmp_path: Path) -> None:

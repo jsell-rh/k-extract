@@ -203,14 +203,16 @@ async def run_agent(
                     usage.apply_final(message)
 
                     if conv_logger is not None:
-                        conv_logger.log_message(
-                            "result",
-                            {
-                                "subtype": message.subtype,
-                                "is_error": message.is_error,
-                                "duration_ms": message.duration_ms,
-                            },
-                        )
+                        result_data: dict[str, Any] = {
+                            "subtype": message.subtype,
+                            "is_error": message.is_error,
+                            "duration_ms": message.duration_ms,
+                        }
+                        if message.errors:
+                            result_data["errors"] = message.errors
+                        if message.result:
+                            result_data["result"] = message.result
+                        conv_logger.log_message("result", result_data)
 
                     if message.subtype == "success":
                         return AgentResult(
