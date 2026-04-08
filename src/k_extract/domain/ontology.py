@@ -172,6 +172,26 @@ class Ontology(BaseModel):
                 raise ValueError(msg)
         return self
 
+    @model_validator(mode="after")
+    def validate_no_kebab_prefix_collisions(self) -> Ontology:
+        """Ensure no two entity types produce the same kebab-case slug prefix.
+
+        Different PascalCase names can map to the same kebab-case prefix
+        (e.g., SREFile and SreFile both → sre-file), which would break
+        slug-based lookups. Reject such collisions.
+        """
+        seen: dict[str, str] = {}
+        for type_name in self.entity_types:
+            kebab = _pascal_to_kebab(type_name)
+            if kebab in seen:
+                msg = (
+                    f"Entity types {seen[kebab]!r} and {type_name!r} both produce "
+                    f"kebab-case prefix {kebab!r} — slug prefixes must be unique"
+                )
+                raise ValueError(msg)
+            seen[kebab] = type_name
+        return self
+
     def get_entity_type(self, type_name: str) -> EntityTypeDefinition | None:
         """Look up an entity type definition by type name."""
         return self.entity_types.get(type_name)
@@ -258,6 +278,11 @@ class Ontology(BaseModel):
                             f"Invalid tag {tag!r} on entity {entity.slug!r}. "
                             f"Allowed tags: {sorted(allowed_tags)}"
                         )
+            else:
+                errors.append(
+                    f"Property 'tags' on entity {entity.slug!r} must be an "
+                    f"array of strings, got {type(tags).__name__}"
+                )
 
         return errors
 

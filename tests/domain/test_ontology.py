@@ -499,6 +499,58 @@ class TestOntologyContainer:
         assert len(results) == 1
         assert results[0].slug == "sre-file:alert-rules"
 
+    def test_kebab_prefix_collision_sre_rejected(self) -> None:
+        """SREFile and SreFile both map to 'sre-file' — must be rejected."""
+        sre_type_1 = EntityTypeDefinition(
+            type="SREFile",
+            description="SRE file v1",
+            tier=Tier.FILE_BASED,
+            required_properties=[],
+            optional_properties=[],
+            property_definitions={},
+        )
+        sre_type_2 = EntityTypeDefinition(
+            type="SreFile",
+            description="SRE file v2",
+            tier=Tier.FILE_BASED,
+            required_properties=[],
+            optional_properties=[],
+            property_definitions={},
+        )
+        with pytest.raises(ValidationError, match="kebab-case prefix"):
+            Ontology(
+                entity_types={"SREFile": sre_type_1, "SreFile": sre_type_2},
+            )
+
+    def test_kebab_prefix_collision_api_rejected(self) -> None:
+        """APIClient and ApiClient both map to 'api-client' — must be rejected."""
+        api_type_1 = EntityTypeDefinition(
+            type="APIClient",
+            description="API client v1",
+            tier=Tier.FILE_BASED,
+            required_properties=[],
+            optional_properties=[],
+            property_definitions={},
+        )
+        api_type_2 = EntityTypeDefinition(
+            type="ApiClient",
+            description="API client v2",
+            tier=Tier.FILE_BASED,
+            required_properties=[],
+            optional_properties=[],
+            property_definitions={},
+        )
+        with pytest.raises(ValidationError, match="kebab-case prefix"):
+            Ontology(
+                entity_types={"APIClient": api_type_1, "ApiClient": api_type_2},
+            )
+
+    def test_no_kebab_collision_for_distinct_prefixes(self) -> None:
+        """Entity types with distinct kebab prefixes are accepted."""
+        ontology = _sample_ontology()
+        # Product → product, Repo → repo, DataSource → data-source — all distinct
+        assert len(ontology.entity_types) == 3
+
     def test_find_entity_type_for_slug_not_found(self) -> None:
         ontology = _sample_ontology()
         assert ontology.find_entity_type_for_slug("unknown:thing") is None
@@ -592,6 +644,48 @@ class TestEntityValidation:
         )
         errors = ontology.validate_entity(entity)
         assert any("Invalid tag 'nonexistent'" in e for e in errors)
+
+    def test_tags_as_string_rejected(self) -> None:
+        """Tags must be an array of strings; a scalar string must produce an error."""
+        ontology = _sample_ontology()
+        entity = EntityInstance(
+            slug="product:test",
+            properties={
+                "name": "Test",
+                "description": "Desc",
+                "tags": "core",
+            },
+        )
+        errors = ontology.validate_entity(entity)
+        assert any("array of strings" in e for e in errors)
+
+    def test_tags_as_int_rejected(self) -> None:
+        """Tags must be an array of strings; an integer must produce an error."""
+        ontology = _sample_ontology()
+        entity = EntityInstance(
+            slug="product:test",
+            properties={
+                "name": "Test",
+                "description": "Desc",
+                "tags": 42,
+            },
+        )
+        errors = ontology.validate_entity(entity)
+        assert any("array of strings" in e for e in errors)
+
+    def test_tags_as_bool_rejected(self) -> None:
+        """Tags must be an array of strings; a boolean must produce an error."""
+        ontology = _sample_ontology()
+        entity = EntityInstance(
+            slug="product:test",
+            properties={
+                "name": "Test",
+                "description": "Desc",
+                "tags": True,
+            },
+        )
+        errors = ontology.validate_entity(entity)
+        assert any("array of strings" in e for e in errors)
 
     def test_structural_type_protection(self) -> None:
         ontology = _sample_ontology()
