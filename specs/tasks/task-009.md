@@ -1,6 +1,6 @@
 # Task 009: Data Source Handling — File Discovery, Inventory, and Fingerprinting
 
-**Status:** `in-progress`
+**Status:** `ready-for-review`
 **Spec Reference:** specs/data-sources/data-source-config.md, specs/data-sources/multi-source.md, specs/process/extraction-pipeline.md (Resumability)
 **Branch:** task-009
 **PR:** #9
