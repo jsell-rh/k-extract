@@ -1,6 +1,6 @@
 # Task 008: Prompt Generation — Template Composition and LLM Guidance
 
-**Status:** `in-progress`
+**Status:** `ready-for-review`
 **Spec Reference:** specs/agent/prompt-generation.md, specs/agent/prompt-patterns.md
 **Branch:** task-008
 **PR:** #8
@@ -55,4 +55,5 @@ Reference: specs/agent/prompt-generation.md, specs/agent/prompt-patterns.md.
 
 ## Relevant Commits
 
-(none yet)
+- `32f373c` — chore(task-008): begin implementation
+- `8e11943` — chore(task-008): add PR number

@@ -1,0 +1,7 @@
+## Job {job_id}
+
+Process the following {file_count} files ({total_characters} characters):
+
+{file_list}
+
+Extract all entities and relationships from these files according to your instructions.
