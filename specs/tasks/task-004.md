@@ -1,10 +1,10 @@
 # Task 004: Output Format — JSONL Mutation Writer and ID Generation
 
-**Status:** `ready-for-review`
+**Status:** `needs-revision`
 **Spec Reference:** specs/process/output-format.md
 **Branch:** task-004
 **PR:** #4
-**Review:** (none)
+**Review:** specs/reviews/task-004.md
 
 ## Description
 

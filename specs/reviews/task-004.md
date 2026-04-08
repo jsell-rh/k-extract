@@ -1,0 +1,5 @@
+# Review: Task 004
+
+## Round 1
+
+- [ ] **`JsonlWriter` claims thread-safety but only provides async-safety.** `src/k_extract/pipeline/writer.py:17-20` — The docstring states "Thread-safe and async-safe via an asyncio lock," but `asyncio.Lock()` only serializes coroutines within a single event loop. It provides no protection against concurrent access from multiple threads. The task requirement (task-004.md line 30) explicitly specifies "Thread-safe / async-safe for concurrent workers." The test `test_concurrent_writes` (`tests/pipeline/test_writer.py:119-133`) only validates async concurrency via `asyncio.gather`, not multi-threaded concurrency. To satisfy both requirements, a `threading.Lock` (or equivalent) is needed alongside the `asyncio.Lock`, and a corresponding test exercising multi-threaded writes should be added. **Spec reference:** `specs/tasks/task-004.md` acceptance criterion for streaming JSONL writer; `specs/concurrency/concurrency-model.md` section 9 describes workers running as parallel subprocesses within a single orchestrator process.
