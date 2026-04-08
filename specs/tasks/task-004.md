@@ -3,7 +3,7 @@
 **Status:** `in-progress`
 **Spec Reference:** specs/process/output-format.md
 **Branch:** task-004
-**PR:** (none)
+**PR:** #4
 **Review:** (none)
 
 ## Description
