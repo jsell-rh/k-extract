@@ -58,3 +58,4 @@ Reference: specs/agent/prompt-generation.md, specs/agent/prompt-patterns.md.
 - `32f373c` — chore(task-008): begin implementation
 - `8e11943` — chore(task-008): add PR number
 - `03c517b` — feat(task-008): prompt generation — template composition and LLM guidance
+- `8c0a488` — fix(task-008): add relationship optional_properties and use safe string substitution
