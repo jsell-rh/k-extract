@@ -3,7 +3,7 @@
 **Status:** `in-progress`
 **Spec Reference:** specs/domain/domain-model.md (Section 5), specs/concurrency/concurrency-model.md
 **Branch:** task-006
-**PR:** (none)
+**PR:** #6
 **Review:** (none)
 
 ## Description
