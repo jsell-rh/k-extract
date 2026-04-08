@@ -13,6 +13,7 @@ instantiation time, producing structured log events like:
 from __future__ import annotations
 
 import time
+from typing import TYPE_CHECKING, Any
 
 import structlog
 from claude_agent_sdk import (
@@ -25,6 +26,9 @@ from claude_agent_sdk import (
 
 from k_extract.extraction.logging import get_logger
 
+if TYPE_CHECKING:
+    from k_extract.extraction.agent import UsageStats
+
 # Module-level storage for tool invocation start times, keyed by tool_use_id
 _tool_start_times: dict[str, float] = {}
 
@@ -34,6 +38,7 @@ def create_hooks(
     worker_id: str,
     job_id: str,
     data_source: str,
+    usage_stats: UsageStats | None = None,
 ) -> dict[str, list[HookMatcher]]:
     """Create SDK hooks bound to a specific worker instance.
 
@@ -43,6 +48,8 @@ def create_hooks(
         worker_id: The worker's zero-padded identifier.
         job_id: The job identifier this worker is processing.
         data_source: The data source name.
+        usage_stats: The UsageStats instance for this session,
+            used by the Stop hook to log total usage and cost.
     """
     log: structlog.stdlib.BoundLogger = get_logger(
         worker_id=worker_id,
@@ -78,8 +85,18 @@ def create_hooks(
 
         response = input_data.get("tool_response")  # type: ignore[attr-defined]
         is_error = False
+        tool_result: str | None = None
         if isinstance(response, dict):
             is_error = response.get("is_error", False)
+            content = response.get("content")
+            if isinstance(content, list):
+                text_parts = [
+                    c.get("text", "")
+                    for c in content
+                    if isinstance(c, dict) and c.get("type") == "text"
+                ]
+                if text_parts:
+                    tool_result = "\n".join(text_parts)
 
         log.info(
             "extraction.tool_completed",
@@ -87,6 +104,7 @@ def create_hooks(
             tool_use_id=tool_use_id,
             duration_ms=(round(duration_ms, 1) if duration_ms is not None else None),
             is_error=is_error,
+            result=tool_result,
         )
         return {}
 
@@ -110,9 +128,18 @@ def create_hooks(
         session_id: str | None,
         context: HookContext,
     ) -> HookJSONOutput:
+        stop_kwargs: dict[str, Any] = {}
+        if usage_stats is not None:
+            stop_kwargs["input_tokens"] = usage_stats.input_tokens
+            stop_kwargs["output_tokens"] = usage_stats.output_tokens
+            stop_kwargs["cache_creation_input_tokens"] = (
+                usage_stats.cache_creation_input_tokens
+            )
+            stop_kwargs["cache_read_input_tokens"] = usage_stats.cache_read_input_tokens
+            stop_kwargs["cost_usd"] = usage_stats.cost_usd
         log.info(
             "extraction.agent_stopped",
-            stop_hook_active=input_data["stop_hook_active"],  # type: ignore[typeddict-item]
+            **stop_kwargs,
         )
         return {}
 

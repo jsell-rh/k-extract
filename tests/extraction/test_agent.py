@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import time
 from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -84,6 +85,22 @@ class TestUsageStats:
         stats.accumulate_message({"input_tokens": 100}, None)
         stats.accumulate_message({"input_tokens": 200}, None)
         assert stats.input_tokens == 300
+
+    def test_accumulate_message_object_style(self) -> None:
+        """Usage can arrive as an object with attributes, not just a dict."""
+
+        class UsageObj:
+            input_tokens = 100
+            output_tokens = 50
+            cache_creation_input_tokens = 10
+            cache_read_input_tokens = 20
+
+        stats = UsageStats()
+        stats.accumulate_message(UsageObj(), "msg-obj-1")
+        assert stats.input_tokens == 100
+        assert stats.output_tokens == 50
+        assert stats.cache_creation_input_tokens == 10
+        assert stats.cache_read_input_tokens == 20
 
     def test_apply_final_overrides(self) -> None:
         stats = UsageStats()
@@ -204,14 +221,38 @@ class TestFormatWorkerId:
 
 
 class TestGetInt:
-    def test_present(self) -> None:
+    def test_dict_present(self) -> None:
         assert _get_int({"input_tokens": 42}, "input_tokens") == 42
 
-    def test_missing(self) -> None:
+    def test_dict_missing(self) -> None:
         assert _get_int({}, "input_tokens") == 0
 
-    def test_none_value(self) -> None:
+    def test_dict_none_value(self) -> None:
         assert _get_int({"input_tokens": None}, "input_tokens") == 0
+
+    def test_object_present(self) -> None:
+        """Attribute-style access on an object."""
+
+        class UsageObj:
+            input_tokens = 42
+
+        assert _get_int(UsageObj(), "input_tokens") == 42
+
+    def test_object_missing(self) -> None:
+        """Attribute-style access with missing attribute."""
+
+        class UsageObj:
+            pass
+
+        assert _get_int(UsageObj(), "input_tokens") == 0
+
+    def test_object_none_value(self) -> None:
+        """Attribute-style access with None attribute."""
+
+        class UsageObj:
+            input_tokens = None
+
+        assert _get_int(UsageObj(), "input_tokens") == 0
 
 
 # ------------------------------------------------------------------ #
@@ -386,6 +427,31 @@ class TestHooks:
         assert result == {}
 
     @pytest.mark.asyncio
+    async def test_post_tool_use_hook_logs_result(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """PostToolUse hook logs the tool result content."""
+        configure_logging(json_output=True)
+        hooks = create_hooks(worker_id="01", job_id="job-1", data_source="test-source")
+        hook_fn = hooks["PostToolUse"][0].hooks[0]
+        _tool_start_times["tu-result"] = time.monotonic()
+        input_data: dict[str, Any] = {
+            "hook_event_name": "PostToolUse",
+            "session_id": "sess-1",
+            "transcript_path": "/tmp/test",
+            "cwd": "/tmp",
+            "tool_name": "mcp__extraction-tools__manage_entity",
+            "tool_input": {"slug": "repo:test"},
+            "tool_response": {
+                "content": [{"type": "text", "text": "Entity created: repo:test"}],
+            },
+            "tool_use_id": "tu-result",
+        }
+        await hook_fn(input_data, "sess-1", {})
+        output = capsys.readouterr().out
+        assert "Entity created: repo:test" in output
+
+    @pytest.mark.asyncio
     async def test_post_tool_use_failure_hook(self) -> None:
         configure_logging(json_output=True)
         hooks = create_hooks(worker_id="01", job_id="job-1", data_source="test-source")
@@ -411,8 +477,36 @@ class TestHooks:
     @pytest.mark.asyncio
     async def test_stop_hook(self) -> None:
         configure_logging(json_output=True)
-        hooks = create_hooks(worker_id="01", job_id="job-1", data_source="test-source")
+        usage = UsageStats(
+            input_tokens=500,
+            output_tokens=200,
+            cache_creation_input_tokens=30,
+            cache_read_input_tokens=40,
+            cost_usd=0.05,
+        )
+        hooks = create_hooks(
+            worker_id="01",
+            job_id="job-1",
+            data_source="test-source",
+            usage_stats=usage,
+        )
         assert "Stop" in hooks
+        hook_fn = hooks["Stop"][0].hooks[0]
+        input_data: dict[str, Any] = {
+            "hook_event_name": "Stop",
+            "session_id": "sess-1",
+            "transcript_path": "/tmp/test",
+            "cwd": "/tmp",
+            "stop_hook_active": True,
+        }
+        result = await hook_fn(input_data, "sess-1", {})
+        assert result == {}
+
+    @pytest.mark.asyncio
+    async def test_stop_hook_without_usage(self) -> None:
+        """Stop hook works without usage_stats (backwards compatible)."""
+        configure_logging(json_output=True)
+        hooks = create_hooks(worker_id="01", job_id="job-1", data_source="test-source")
         hook_fn = hooks["Stop"][0].hooks[0]
         input_data: dict[str, Any] = {
             "hook_event_name": "Stop",

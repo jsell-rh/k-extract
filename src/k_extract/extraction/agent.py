@@ -43,16 +43,15 @@ class UsageStats:
     cost_usd: float | None = None
     _seen_message_ids: set[str] = field(default_factory=set)
 
-    def accumulate_message(
-        self, usage: dict[str, Any] | None, message_id: str | None
-    ) -> None:
+    def accumulate_message(self, usage: Any, message_id: str | None) -> None:
         """Accumulate usage from an AssistantMessage.
 
         Deduplicates by message_id to avoid double-counting from
-        parallel tool uses that share the same message.
+        parallel tool uses that share the same message. Handles both
+        dict-style and attribute-style usage access patterns.
 
         Args:
-            usage: Usage dict from message.usage (may be None).
+            usage: Usage dict or object from message.usage (may be None).
             message_id: The message's unique ID for deduplication.
         """
         if usage is None:
@@ -172,6 +171,7 @@ async def run_agent(
         worker_id=worker_id,
         job_id=job_id,
         data_source=data_source,
+        usage_stats=usage,
     )
 
     options = ClaudeAgentOptions(
@@ -213,12 +213,6 @@ async def run_agent(
                         )
 
                     if message.subtype == "success":
-                        log.info(
-                            "extraction.agent_completed",
-                            input_tokens=usage.input_tokens,
-                            output_tokens=usage.output_tokens,
-                            cost_usd=usage.cost_usd,
-                        )
                         return AgentResult(
                             success=True, error_message=None, usage=usage
                         )
@@ -239,13 +233,6 @@ async def run_agent(
                     )
 
             # Loop exited without a result subtype — treat as success
-            log.info(
-                "extraction.agent_completed",
-                input_tokens=usage.input_tokens,
-                output_tokens=usage.output_tokens,
-                cost_usd=usage.cost_usd,
-                note="loop_exit_no_subtype",
-            )
             return AgentResult(success=True, error_message=None, usage=usage)
 
     except Exception as exc:
@@ -298,17 +285,20 @@ def _handle_assistant_message(
             )
 
 
-def _get_int(usage: dict[str, Any], key: str) -> int:
-    """Safely extract an integer from a usage dict.
+def _get_int(usage: Any, key: str) -> int:
+    """Safely extract an integer from a usage dict or object.
+
+    Handles both dict-style (.get()) and attribute-style (getattr()) access,
+    as the SDK may return usage in either form.
 
     Args:
-        usage: The usage dict (may contain ints or None values).
+        usage: The usage dict or object (may contain ints or None values).
         key: The key to look up.
 
     Returns:
         The integer value, or 0 if missing or None.
     """
-    val = usage.get(key)
+    val = usage.get(key) if isinstance(usage, dict) else getattr(usage, key, None)
     if isinstance(val, int):
         return val
     return 0
