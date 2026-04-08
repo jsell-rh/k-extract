@@ -1,8 +1,8 @@
 # Task 001: Project Scaffolding and CI Setup
 
-**Status:** `not-started`
+**Status:** `in-progress`
 **Spec Reference:** specs/decisions/technology-choices.md
-**Branch:** (none)
+**Branch:** task-001
 **PR:** (none)
 **Review:** (none)
 
