@@ -171,10 +171,12 @@ class TestBuildGuidancePrompt:
         prompt = build_guidance_prompt(sample_ontology, "test problem")
         assert "timeout" in prompt
 
-    def test_includes_tag_definitions(self, sample_ontology: OntologyConfig) -> None:
+    def test_includes_tag_definitions_with_descriptions(
+        self, sample_ontology: OntologyConfig
+    ) -> None:
         prompt = build_guidance_prompt(sample_ontology, "test problem")
-        assert "integration" in prompt
-        assert "unit" in prompt
+        assert "integration (Integration test)" in prompt
+        assert "unit (Unit test)" in prompt
 
     def test_includes_relationship_types(self, sample_ontology: OntologyConfig) -> None:
         prompt = build_guidance_prompt(sample_ontology, "test problem")

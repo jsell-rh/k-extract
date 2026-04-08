@@ -51,7 +51,9 @@ def build_guidance_prompt(ontology: OntologyConfig, problem_statement: str) -> s
             ", ".join(et.optional_properties) if et.optional_properties else "(none)"
         )
         tags = (
-            ", ".join(sorted(et.tag_definitions.keys()))
+            ", ".join(
+                f"{name} ({desc})" for name, desc in sorted(et.tag_definitions.items())
+            )
             if et.tag_definitions
             else "(none)"
         )
