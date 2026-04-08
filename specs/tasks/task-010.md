@@ -77,4 +77,4 @@ Reference: specs/agent/agent-architecture.md, specs/decisions/technology-choices
 
 - `861e5c7` — feat(task-010): agent architecture — instantiation, message loop, observability
 - `08fb832` — fix(task-010): address review findings — polymorphic usage, stop hook observability, tool result logging
-- `pending` — fix(task-010): address round 2 — error details in conversation log, stop hook test assertion
+- `ca26e8a` — fix(task-010): address round 2 — error details in conversation log, stop hook test assertion
