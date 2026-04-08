@@ -299,23 +299,31 @@ class Ontology(BaseModel):
             errors.append(f"Unknown relationship type: {relationship.composite_key!r}")
             return errors
 
-        # Check entity type consistency
-        if relationship.source_entity_type != rel_type_def.source_entity_type:
-            errors.append(
-                f"Source entity type {relationship.source_entity_type!r} does not "
-                f"match definition {rel_type_def.source_entity_type!r}"
-            )
-        if relationship.target_entity_type != rel_type_def.target_entity_type:
-            errors.append(
-                f"Target entity type {relationship.target_entity_type!r} does not "
-                f"match definition {rel_type_def.target_entity_type!r}"
-            )
-
         # Check referential integrity — source and target entities must exist
-        if self.get_entity_by_slug(relationship.source_slug) is None:
+        # and their types must match the declared entity types (spec 4.2 rules 4-5)
+        source_entity = self.get_entity_by_slug(relationship.source_slug)
+        if source_entity is None:
             errors.append(f"Source entity not found: {relationship.source_slug!r}")
-        if self.get_entity_by_slug(relationship.target_slug) is None:
+        else:
+            expected_prefix = _pascal_to_kebab(relationship.source_entity_type)
+            if source_entity.entity_type != expected_prefix:
+                errors.append(
+                    f"Source entity {relationship.source_slug!r} is of type "
+                    f"{source_entity.entity_type!r}, expected "
+                    f"{expected_prefix!r} (from {relationship.source_entity_type!r})"
+                )
+
+        target_entity = self.get_entity_by_slug(relationship.target_slug)
+        if target_entity is None:
             errors.append(f"Target entity not found: {relationship.target_slug!r}")
+        else:
+            expected_prefix = _pascal_to_kebab(relationship.target_entity_type)
+            if target_entity.entity_type != expected_prefix:
+                errors.append(
+                    f"Target entity {relationship.target_slug!r} is of type "
+                    f"{target_entity.entity_type!r}, expected "
+                    f"{expected_prefix!r} (from {relationship.target_entity_type!r})"
+                )
 
         # Check required parameters
         for param in rel_type_def.required_parameters:

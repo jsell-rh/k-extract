@@ -808,6 +808,51 @@ class TestRelationshipValidation:
         errors = ontology.validate_relationship(rel)
         assert errors == []
 
+    def test_source_entity_type_mismatch(self) -> None:
+        """Source slug's type prefix must match declared source_entity_type."""
+        ontology = _sample_ontology()
+        # repo:my-repo is a Repo, not a Product
+        rel = RelationshipInstance(
+            source_entity_type="Product",
+            source_slug="repo:my-repo",
+            target_entity_type="Repo",
+            target_slug="repo:my-repo",
+            relationship_type="OWNS",
+            properties={"since": "2024"},
+        )
+        errors = ontology.validate_relationship(rel)
+        assert any("Source entity" in e and "expected" in e for e in errors)
+
+    def test_target_entity_type_mismatch(self) -> None:
+        """Target slug's type prefix must match declared target_entity_type."""
+        ontology = _sample_ontology()
+        # product:openshift is a Product, not a Repo
+        rel = RelationshipInstance(
+            source_entity_type="Product",
+            source_slug="product:openshift",
+            target_entity_type="Repo",
+            target_slug="product:openshift",
+            relationship_type="OWNS",
+            properties={"since": "2024"},
+        )
+        errors = ontology.validate_relationship(rel)
+        assert any("Target entity" in e and "expected" in e for e in errors)
+
+    def test_both_entity_types_mismatch(self) -> None:
+        """Both source and target type mismatches should be reported."""
+        ontology = _sample_ontology()
+        rel = RelationshipInstance(
+            source_entity_type="Product",
+            source_slug="repo:my-repo",
+            target_entity_type="Repo",
+            target_slug="product:openshift",
+            relationship_type="OWNS",
+            properties={"since": "2024"},
+        )
+        errors = ontology.validate_relationship(rel)
+        assert any("Source entity" in e and "expected" in e for e in errors)
+        assert any("Target entity" in e and "expected" in e for e in errors)
+
 
 # --- Helper Function Tests ---
 
