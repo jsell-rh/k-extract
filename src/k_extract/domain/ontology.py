@@ -26,6 +26,14 @@ class Tier(enum.StrEnum):
     SCENARIO_BASED = "scenario-based"
 
 
+class RelationshipCategory(enum.StrEnum):
+    """Relationship type classification category (spec section 1.6)."""
+
+    STRUCTURAL = "structural"
+    AGENT_MANAGED = "agent-managed"
+    AGGREGATOR_MANAGED = "aggregator-managed"
+
+
 class RelationshipDirection(BaseModel):
     """Forward or reverse relationship descriptor."""
 
@@ -77,6 +85,7 @@ class RelationshipTypeDefinition(BaseModel):
     target_entity_type: str
     forward_relationship: RelationshipDirection
     reverse_relationship: RelationshipDirection | None = None
+    category: RelationshipCategory
     required_parameters: list[str]
     optional_parameters: list[str]
     property_definitions: dict[str, str] = {}
@@ -97,6 +106,11 @@ class RelationshipTypeDefinition(BaseModel):
             f"|{self.forward_relationship.type}"
             f"|{self.target_entity_type}"
         )
+
+    @property
+    def is_structural(self) -> bool:
+        """Structural types are protected from agent modification."""
+        return self.category == RelationshipCategory.STRUCTURAL
 
     @staticmethod
     def parse_composite_key(key: str) -> tuple[str, str, str]:
@@ -297,6 +311,14 @@ class Ontology(BaseModel):
         rel_type_def = self.get_relationship_type(relationship.composite_key)
         if rel_type_def is None:
             errors.append(f"Unknown relationship type: {relationship.composite_key!r}")
+            return errors
+
+        # Structural type protection (spec section 4.4)
+        if rel_type_def.is_structural:
+            errors.append(
+                f"Cannot modify relationship of structural type "
+                f"{relationship.composite_key!r}: protected from agent edits"
+            )
             return errors
 
         # Check referential integrity — source and target entities must exist

@@ -15,6 +15,7 @@ from k_extract.domain.entities import EntityInstance
 from k_extract.domain.ontology import (
     EntityTypeDefinition,
     Ontology,
+    RelationshipCategory,
     RelationshipDirection,
     RelationshipTypeDefinition,
     Tier,
@@ -86,9 +87,20 @@ def ontology() -> Ontology:
         forward_relationship=RelationshipDirection(
             type="REFERENCES", description="References another product"
         ),
+        category=RelationshipCategory.AGENT_MANAGED,
         required_parameters=["context"],
         optional_parameters=[],
         property_definitions={"context": "Reference context"},
+    )
+    contains_type = RelationshipTypeDefinition(
+        source_entity_type="DataSource",
+        target_entity_type="Product",
+        forward_relationship=RelationshipDirection(
+            type="CONTAINS", description="Data source contains product"
+        ),
+        category=RelationshipCategory.STRUCTURAL,
+        required_parameters=[],
+        optional_parameters=[],
     )
     return Ontology(
         entity_types={
@@ -97,6 +109,7 @@ def ontology() -> Ontology:
         },
         relationship_types={
             rel_type.composite_key: rel_type,
+            contains_type.composite_key: contains_type,
         },
     )
 
@@ -741,6 +754,23 @@ class TestValidateAndCommit:
         assert len(results) == 1
         assert results[0].properties["context"] == "updated"
         assert results[0].properties["weight"] == 5
+
+    def test_structural_relationship_protection(self, store: OntologyStore) -> None:
+        """Staging a structural relationship type must be rejected at commit."""
+        store.stage_relationship(
+            "worker-1",
+            RelationshipInstance(
+                source_entity_type="DataSource",
+                source_slug="data-source:src",
+                target_entity_type="Product",
+                target_slug="product:tgt",
+                relationship_type="CONTAINS",
+                properties={},
+            ),
+        )
+
+        errors = store.validate_and_commit("worker-1")
+        assert any("structural type" in e for e in errors)
 
     def test_required_parameters_on_relationship(self, store: OntologyStore) -> None:
         store.upsert_entity(_make_product("product:a"))

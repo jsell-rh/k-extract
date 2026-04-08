@@ -488,6 +488,7 @@ class OntologyStore:
                     merged_entities,
                     merged_relationships,
                     staged_slugs,
+                    staged_rel_keys,
                     job_files,
                 )
                 if errors:
@@ -698,6 +699,7 @@ class OntologyStore:
         merged_entities: dict[str, EntityInstance],
         merged_relationships: list[RelationshipInstance],
         staged_slugs: set[str],
+        staged_rel_keys: set[tuple[str, str, str]],
         job_files: list[str] | None,
     ) -> list[str]:
         """Validate the merged ontology state.
@@ -715,6 +717,15 @@ class OntologyStore:
                 errors.append(
                     f"Cannot modify entity of structural type "
                     f"{type_def.type!r}: protected from agent edits"
+                )
+
+        # Structural protection on staged relationships
+        for composite_key, _src, _tgt in staged_rel_keys:
+            rel_type_def = self._ontology.get_relationship_type(composite_key)
+            if rel_type_def and rel_type_def.is_structural:
+                errors.append(
+                    f"Cannot modify relationship of structural type "
+                    f"{composite_key!r}: protected from agent edits"
                 )
 
         # Entity validation

@@ -7,6 +7,7 @@ from k_extract.domain.entities import EntityInstance
 from k_extract.domain.ontology import (
     EntityTypeDefinition,
     Ontology,
+    RelationshipCategory,
     RelationshipDirection,
     RelationshipTypeDefinition,
     Tier,
@@ -70,6 +71,7 @@ def _owns_rel_type() -> RelationshipTypeDefinition:
         reverse_relationship=RelationshipDirection(
             type="OWNED_BY", description="Repository owned by product"
         ),
+        category=RelationshipCategory.AGENT_MANAGED,
         required_parameters=["since"],
         optional_parameters=["notes"],
         property_definitions={
@@ -86,6 +88,7 @@ def _contains_rel_type() -> RelationshipTypeDefinition:
         forward_relationship=RelationshipDirection(
             type="CONTAINS", description="Data source contains product"
         ),
+        category=RelationshipCategory.STRUCTURAL,
         required_parameters=[],
         optional_parameters=[],
     )
@@ -305,6 +308,7 @@ class TestRelationshipTypeDefinition:
                 source_entity_type="product",
                 target_entity_type="Repo",
                 forward_relationship=RelationshipDirection(type="OWNS"),
+                category=RelationshipCategory.AGENT_MANAGED,
                 required_parameters=[],
                 optional_parameters=[],
             )
@@ -315,9 +319,17 @@ class TestRelationshipTypeDefinition:
                 source_entity_type="Product",
                 target_entity_type="repo",
                 forward_relationship=RelationshipDirection(type="OWNS"),
+                category=RelationshipCategory.AGENT_MANAGED,
                 required_parameters=[],
                 optional_parameters=[],
             )
+
+    def test_is_structural(self) -> None:
+        contains = _contains_rel_type()
+        assert contains.is_structural is True
+
+        owns = _owns_rel_type()
+        assert owns.is_structural is False
 
     def test_property_definitions_optional(self) -> None:
         rt = _contains_rel_type()
@@ -795,7 +807,8 @@ class TestRelationshipValidation:
         errors = ontology.validate_relationship(rel)
         assert any("Target entity not found" in e for e in errors)
 
-    def test_relationship_with_no_required_params(self) -> None:
+    def test_structural_relationship_type_protection(self) -> None:
+        """Structural relationship types are protected from agent modification."""
         ontology = _sample_ontology()
         rel = RelationshipInstance(
             source_entity_type="DataSource",
@@ -806,7 +819,9 @@ class TestRelationshipValidation:
             properties={},
         )
         errors = ontology.validate_relationship(rel)
-        assert errors == []
+        assert len(errors) == 1
+        err = errors[0].lower()
+        assert "structural type" in err or "protected" in err
 
     def test_source_entity_type_mismatch(self) -> None:
         """Source slug's type prefix must match declared source_entity_type."""
