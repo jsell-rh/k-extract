@@ -241,7 +241,8 @@ def _read_sample_files(
 ) -> str:
     """Read a representative sample of files for AI analysis.
 
-    Selects readable files from each data source up to max_chars total.
+    Divides the character budget equally across data sources to ensure
+    each source is represented in the sample.
 
     Args:
         all_files: Dict mapping resolved source path to discovered files.
@@ -250,28 +251,32 @@ def _read_sample_files(
     Returns:
         Formatted string containing sample file contents.
     """
+    if not all_files:
+        return "(no readable files found)"
+
+    source_count = len(all_files)
+    per_source_budget = max_chars // source_count
+
     samples: list[str] = []
-    total_chars = 0
 
     for root_path, files in all_files.items():
         root = Path(root_path)
         readable = [f for f in files if f.char_count > 0]
+        source_chars = 0
 
         for f in readable:
-            if total_chars >= max_chars:
+            if source_chars >= per_source_budget:
                 break
             file_path = root / f.path
             try:
                 content = file_path.read_text(encoding="utf-8")
-                if total_chars + len(content) > max_chars:
-                    content = content[: max_chars - total_chars]
+                remaining = per_source_budget - source_chars
+                if len(content) > remaining:
+                    content = content[:remaining]
                 samples.append(f"### {f.path}\n\n```\n{content}\n```")
-                total_chars += len(content)
+                source_chars += len(content)
             except (UnicodeDecodeError, OSError):
                 continue
-
-        if total_chars >= max_chars:
-            break
 
     return "\n\n".join(samples) if samples else "(no readable files found)"
 
@@ -356,7 +361,18 @@ async def _propose_ontology(
     )
 
     response = await llm_call(prompt)
-    return _parse_ontology_response(response)
+    ontology, reasoning = _parse_ontology_response(response)
+    _display_ontology(ontology)
+    if reasoning:
+        _display_reasoning(reasoning)
+    return ontology
+
+
+def _display_reasoning(reasoning: str) -> None:
+    """Display the AI's reasoning for the ontology proposal."""
+    click.echo("Reasoning:")
+    click.echo(reasoning)
+    click.echo()
 
 
 def _display_ontology(ontology: OntologyConfig) -> None:
@@ -470,25 +486,28 @@ async def _refine_ontology(
     )
 
     response = await llm_call(prompt)
-    return _parse_ontology_response(response)
+    ontology, _ = _parse_ontology_response(response)
+    return ontology
 
 
-def _parse_ontology_response(response: str) -> OntologyConfig:
-    """Parse an LLM response containing a YAML ontology proposal.
+def _parse_ontology_response(response: str) -> tuple[OntologyConfig, str]:
+    """Parse an LLM response containing a YAML ontology proposal and reasoning.
 
     Extracts a YAML code block from the response and validates it
-    against the OntologyConfig schema.
+    against the OntologyConfig schema. Also extracts reasoning text
+    that appears after the YAML block.
 
     Args:
         response: Raw LLM response text.
 
     Returns:
-        Validated OntologyConfig.
+        Tuple of (validated OntologyConfig, reasoning text after YAML block).
 
     Raises:
         click.ClickException: If YAML parsing or validation fails.
     """
     yaml_text = _extract_yaml_block(response)
+    reasoning = _extract_reasoning(response)
     try:
         data = yaml.safe_load(yaml_text)
     except yaml.YAMLError as exc:
@@ -500,7 +519,7 @@ def _parse_ontology_response(response: str) -> OntologyConfig:
         raise click.ClickException(msg)
 
     try:
-        return OntologyConfig.model_validate(data)
+        return OntologyConfig.model_validate(data), reasoning
     except Exception as exc:
         msg = f"AI-proposed ontology failed validation: {exc}"
         raise click.ClickException(msg) from exc
@@ -522,6 +541,22 @@ def _extract_yaml_block(text: str) -> str:
     if match:
         return match.group(1)
     return text
+
+
+def _extract_reasoning(text: str) -> str:
+    """Extract reasoning text that appears after the YAML code block.
+
+    Args:
+        text: Full LLM response text.
+
+    Returns:
+        The text after the closing ``` of the YAML block, stripped.
+        Empty string if no YAML block is found.
+    """
+    match = re.search(r"```(?:yaml|yml)\s*\n.*?```", text, re.DOTALL)
+    if match:
+        return text[match.end() :].strip()
+    return ""
 
 
 async def _build_config(

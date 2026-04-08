@@ -11,6 +11,7 @@ from click.testing import CliRunner
 
 from k_extract.cli import main
 from k_extract.cli.init import (
+    _extract_reasoning,
     _extract_yaml_block,
     _format_inventory_for_prompt,
     _format_size,
@@ -125,7 +126,7 @@ class TestExtractYamlBlock:
 
 class TestParseOntologyResponse:
     def test_parses_valid_response(self) -> None:
-        ontology = _parse_ontology_response(_SAMPLE_LLM_RESPONSE)
+        ontology, reasoning = _parse_ontology_response(_SAMPLE_LLM_RESPONSE)
         assert len(ontology.entity_types) == 1
         assert ontology.entity_types[0].label == "Component"
         assert ontology.entity_types[0].description == "A software component"
@@ -134,6 +135,15 @@ class TestParseOntologyResponse:
         assert ontology.relationship_types[0].label == "DEPENDS_ON"
         assert ontology.relationship_types[0].source_entity_type == "Component"
         assert ontology.relationship_types[0].target_entity_type == "Component"
+
+    def test_extracts_reasoning(self) -> None:
+        _, reasoning = _parse_ontology_response(_SAMPLE_LLM_RESPONSE)
+        assert "Component" in reasoning
+        assert "DEPENDS_ON" in reasoning
+
+    def test_empty_reasoning_without_yaml_block(self) -> None:
+        _, reasoning = _parse_ontology_response(_SAMPLE_ONTOLOGY_YAML)
+        assert reasoning == ""
 
     def test_raises_on_invalid_yaml(self) -> None:
         with pytest.raises(click.ClickException):
@@ -148,9 +158,27 @@ class TestParseOntologyResponse:
             _parse_ontology_response("```yaml\nentity_types: not_a_list\n```")
 
     def test_parses_raw_yaml_without_fences(self) -> None:
-        ontology = _parse_ontology_response(_SAMPLE_ONTOLOGY_YAML)
+        ontology, _ = _parse_ontology_response(_SAMPLE_ONTOLOGY_YAML)
         assert len(ontology.entity_types) == 1
         assert ontology.entity_types[0].label == "Component"
+
+
+class TestExtractReasoning:
+    def test_extracts_text_after_yaml(self) -> None:
+        text = "Intro\n```yaml\nkey: value\n```\nThis is reasoning."
+        assert _extract_reasoning(text) == "This is reasoning."
+
+    def test_empty_when_no_yaml_block(self) -> None:
+        assert _extract_reasoning("just some text") == ""
+
+    def test_empty_when_nothing_after_block(self) -> None:
+        assert _extract_reasoning("```yaml\nkey: value\n```") == ""
+
+    def test_multiline_reasoning(self) -> None:
+        text = "```yaml\nk: v\n```\nLine 1\nLine 2\nLine 3"
+        result = _extract_reasoning(text)
+        assert "Line 1" in result
+        assert "Line 3" in result
 
 
 class TestFormatSize:
@@ -202,6 +230,31 @@ class TestReadSampleFiles:
     def test_empty_files(self) -> None:
         result = _read_sample_files({})
         assert result == "(no readable files found)"
+
+    def test_fair_allocation_across_sources(self, tmp_path: Path) -> None:
+        """Each data source gets an equal share of the character budget."""
+        src1 = tmp_path / "source1"
+        src1.mkdir()
+        # Write a large file that would consume the entire budget alone
+        (src1 / "big.txt").write_text("A" * 1000)
+
+        src2 = tmp_path / "source2"
+        src2.mkdir()
+        (src2 / "small.txt").write_text("B" * 100)
+
+        files1 = discover_files(src1)
+        files2 = discover_files(src2)
+        all_files = {
+            str(src1.resolve()): files1,
+            str(src2.resolve()): files2,
+        }
+
+        result = _read_sample_files(all_files, max_chars=200)
+        # Both sources must be represented
+        assert "big.txt" in result
+        assert "small.txt" in result
+        # Source 1 should be limited to ~100 chars (200 / 2 sources)
+        assert "A" * 101 not in result
 
 
 class TestFormatInventoryForPrompt:
@@ -474,6 +527,34 @@ class TestInitCLI:
 
         config = load_config(output_path)
         assert config.problem_statement == "Test problem via CLI"
+
+    def test_reasoning_displayed(
+        self, data_source: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Reasoning from the AI ontology proposal is displayed to the user."""
+        monkeypatch.setattr(
+            "k_extract.cli.init._create_default_llm_caller",
+            lambda: _make_mock_llm(),
+        )
+        output_path = tmp_path / "output.yaml"
+        runner = CliRunner()
+        result = runner.invoke(
+            main,
+            [
+                "init",
+                str(data_source),
+                "--problem",
+                "Test problem",
+                "--output",
+                str(output_path),
+            ],
+        )
+
+        assert result.exit_code == 0, result.output
+        # Reasoning from _SAMPLE_LLM_RESPONSE should appear in output
+        assert "Reasoning" in result.output
+        assert "Component" in result.output
+        assert "DEPENDS_ON" in result.output
 
     def test_init_shows_in_help(self) -> None:
         """The init command is listed in the main help."""
