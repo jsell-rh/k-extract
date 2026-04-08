@@ -1,6 +1,6 @@
 # Task 001: Project Scaffolding and CI Setup
 
-**Status:** `ready-for-review`
+**Status:** `complete`
 **Spec Reference:** specs/decisions/technology-choices.md
 **Branch:** task-001
 **PR:** #1
@@ -72,3 +72,4 @@ Set up the foundational project structure, packaging, pre-commit hooks, and CI p
 - `52252ef` — fix(task-001): address review findings — CI install and test mirroring
 - `2663c1d` — chore(task-001): update task status to ready-for-review
 - `0985c8f` — fix(task-001): use dependency-groups for dev deps so uv sync --dev works
+- Merged via PR #1
