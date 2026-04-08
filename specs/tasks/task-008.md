@@ -3,7 +3,7 @@
 **Status:** `in-progress`
 **Spec Reference:** specs/agent/prompt-generation.md, specs/agent/prompt-patterns.md
 **Branch:** task-008
-**PR:** (none)
+**PR:** #8
 **Review:** (none)
 
 ## Description
