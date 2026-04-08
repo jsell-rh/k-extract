@@ -1,10 +1,10 @@
 # Task 002: Domain Model — Ontology Type Definitions and Instances
 
-**Status:** `not-started`
+**Status:** `complete`
 **Spec Reference:** specs/domain/domain-model.md
-**Branch:** (none)
-**PR:** (none)
-**Review:** (none)
+**Branch:** task-002
+**PR:** #2
+**Review:** specs/reviews/task-002.md
 
 ## Description
 
@@ -61,4 +61,11 @@ Reference: specs/domain/domain-model.md sections 1–5.
 
 ## Relevant Commits
 
-(none yet)
+- `5a9aa1f` — chore(task-002): begin implementation
+- `dab8077` — chore(task-002): add PR number
+- `1fdef29` — feat(task-002): implement domain model — ontology type definitions and instances
+- `79b282e` — fix(task-002): address all review findings from round 1
+- `2d827de` — fix(task-002): address review round 2 findings
+- `d877abc` — fix(task-002): address review round 3 findings
+- `7950377` — fix(task-002): address review round 4 — entity type cross-check on slug resolution
+- Merged via PR #2
