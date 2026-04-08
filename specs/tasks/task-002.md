@@ -64,3 +64,4 @@ Reference: specs/domain/domain-model.md sections 1–5.
 - `5a9aa1f` — chore(task-002): begin implementation
 - `dab8077` — chore(task-002): add PR number
 - `1fdef29` — feat(task-002): implement domain model — ontology type definitions and instances
+- `79b282e` — fix(task-002): address all review findings from round 1
