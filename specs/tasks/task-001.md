@@ -68,4 +68,4 @@ Set up the foundational project structure, packaging, pre-commit hooks, and CI p
 
 ## Relevant Commits
 
-(none yet)
+- `251d28d` — feat(task-001): project scaffolding and CI setup
