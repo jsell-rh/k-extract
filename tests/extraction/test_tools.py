@@ -240,7 +240,7 @@ class TestSearchEntitiesBySlug:
         result = await search_entities_fn.handler({"slugs": ["product:item-0"]})
         is_error, data = _parse_result(result)
         assert not is_error
-        assert data[0]["entity_type"] == "product"
+        assert data[0]["entity_type"] == "Product"
 
 
 class TestSearchEntitiesByFilePath:
@@ -254,6 +254,7 @@ class TestSearchEntitiesByFilePath:
         assert not is_error
         assert len(data) == 1
         assert data[0]["slug"] == "product:item-0"
+        assert data[0]["entity_type"] == "Product"
 
     @pytest.mark.asyncio
     async def test_not_found(self, search_entities_fn, store):
@@ -626,7 +627,88 @@ class TestSearchRelationshipsListAll:
     """List All mode."""
 
     @pytest.mark.asyncio
-    async def test_list_all_via_show_all(self, search_relationships_fn, store):
+    async def test_list_all_without_slug(self, search_relationships_fn, store):
+        """List All mode: list_instances=True, no slug — returns all instances."""
+        _seed_products(store, 3)
+        for i in range(1, 3):
+            rel = RelationshipInstance(
+                source_entity_type="Product",
+                source_slug="product:item-0",
+                target_entity_type="Product",
+                target_slug=f"product:item-{i}",
+                relationship_type="REFERENCES",
+                properties={"context": f"ctx-{i}"},
+            )
+            store.upsert_relationship(rel)
+
+        result = await search_relationships_fn.handler(
+            {
+                "relationship_type": "REFERENCES",
+                "list_instances": True,
+            }
+        )
+        is_error, data = _parse_result(result)
+        assert not is_error
+        assert data["total"] == 2
+        assert len(data["results"]) == 2
+
+    @pytest.mark.asyncio
+    async def test_list_all_with_cap(self, search_relationships_fn, store):
+        """List All mode respects the default result cap."""
+        _seed_products(store, 15)
+        for i in range(1, 15):
+            rel = RelationshipInstance(
+                source_entity_type="Product",
+                source_slug="product:item-0",
+                target_entity_type="Product",
+                target_slug=f"product:item-{i}",
+                relationship_type="REFERENCES",
+                properties={"context": f"ctx-{i}"},
+            )
+            store.upsert_relationship(rel)
+
+        result = await search_relationships_fn.handler(
+            {
+                "relationship_type": "REFERENCES",
+                "list_instances": True,
+            }
+        )
+        is_error, data = _parse_result(result)
+        assert not is_error
+        assert len(data["results"]) == 10
+        assert data["total"] == 14
+        assert "warning" in data
+
+    @pytest.mark.asyncio
+    async def test_list_all_show_all(self, search_relationships_fn, store):
+        """List All mode with show_all=True returns all without cap."""
+        _seed_products(store, 15)
+        for i in range(1, 15):
+            rel = RelationshipInstance(
+                source_entity_type="Product",
+                source_slug="product:item-0",
+                target_entity_type="Product",
+                target_slug=f"product:item-{i}",
+                relationship_type="REFERENCES",
+                properties={"context": f"ctx-{i}"},
+            )
+            store.upsert_relationship(rel)
+
+        result = await search_relationships_fn.handler(
+            {
+                "relationship_type": "REFERENCES",
+                "list_instances": True,
+                "show_all": True,
+            }
+        )
+        is_error, data = _parse_result(result)
+        assert not is_error
+        assert len(data["results"]) == 14
+        assert "warning" not in data
+
+    @pytest.mark.asyncio
+    async def test_list_by_slug_show_all(self, search_relationships_fn, store):
+        """List by Slug with show_all=True returns uncapped results."""
         _seed_products(store, 15)
         for i in range(1, 15):
             rel = RelationshipInstance(
@@ -1243,6 +1325,194 @@ class TestToolFactory:
         result = await search_w2.handler({"slugs": ["product:item-0"]})
         _, data = _parse_result(result)
         assert "summary" not in data[0]["properties"]
+
+
+class TestSearchRelationshipsMultiKey:
+    """Slug-based lookups across multiple composite keys for same forward type."""
+
+    @pytest.fixture()
+    def multi_key_ontology(self) -> Ontology:
+        """Ontology with two REFERENCES composite keys."""
+        product_type = EntityTypeDefinition(
+            type="Product",
+            description="A product entity",
+            tier=Tier.FILE_BASED,
+            required_properties=["title"],
+            optional_properties=[],
+            property_definitions={"title": "Product title"},
+        )
+        component_type = EntityTypeDefinition(
+            type="Component",
+            description="A component entity",
+            tier=Tier.FILE_BASED,
+            required_properties=["title"],
+            optional_properties=[],
+            property_definitions={"title": "Component title"},
+        )
+        ref_pp = RelationshipTypeDefinition(
+            source_entity_type="Product",
+            target_entity_type="Product",
+            forward_relationship=RelationshipDirection(
+                type="REFERENCES", description="Product references product"
+            ),
+            category=RelationshipCategory.AGENT_MANAGED,
+            required_parameters=[],
+            optional_parameters=[],
+        )
+        ref_cp = RelationshipTypeDefinition(
+            source_entity_type="Component",
+            target_entity_type="Product",
+            forward_relationship=RelationshipDirection(
+                type="REFERENCES", description="Component references product"
+            ),
+            category=RelationshipCategory.AGENT_MANAGED,
+            required_parameters=[],
+            optional_parameters=[],
+        )
+        return Ontology(
+            entity_types={
+                "Product": product_type,
+                "Component": component_type,
+            },
+            relationship_types={
+                ref_pp.composite_key: ref_pp,
+                ref_cp.composite_key: ref_cp,
+            },
+        )
+
+    @pytest.fixture()
+    def multi_key_store(self, engine, multi_key_ontology) -> OntologyStore:
+        return OntologyStore(engine, multi_key_ontology)
+
+    @pytest.fixture()
+    def multi_key_tools(self, multi_key_store, multi_key_ontology):
+        return create_extraction_tools("worker-mk", multi_key_store, multi_key_ontology)
+
+    @pytest.fixture()
+    def mk_search_rel(self, multi_key_tools):
+        return multi_key_tools[1]
+
+    @pytest.mark.asyncio
+    async def test_slug_lookup_spans_multiple_composite_keys(
+        self, mk_search_rel, multi_key_store
+    ):
+        """One slug lookup should find relationships across all matching keys."""
+        p0 = EntityInstance(slug="product:p0", properties={"title": "P0"})
+        p1 = EntityInstance(slug="product:p1", properties={"title": "P1"})
+        c0 = EntityInstance(slug="component:c0", properties={"title": "C0"})
+        multi_key_store.upsert_entity(p0)
+        multi_key_store.upsert_entity(p1)
+        multi_key_store.upsert_entity(c0)
+
+        # Product -> Product relationship
+        rel_pp = RelationshipInstance(
+            source_entity_type="Product",
+            source_slug="product:p0",
+            target_entity_type="Product",
+            target_slug="product:p1",
+            relationship_type="REFERENCES",
+            properties={},
+        )
+        # Component -> Product relationship involving p0 as target
+        rel_cp = RelationshipInstance(
+            source_entity_type="Component",
+            source_slug="component:c0",
+            target_entity_type="Product",
+            target_slug="product:p0",
+            relationship_type="REFERENCES",
+            properties={},
+        )
+        multi_key_store.upsert_relationship(rel_pp)
+        multi_key_store.upsert_relationship(rel_cp)
+
+        # Search for slug "product:p0" — should find both relationships
+        result = await mk_search_rel.handler(
+            {
+                "relationship_type": "REFERENCES",
+                "slug": "product:p0",
+                "show_all": True,
+            }
+        )
+        is_error, data = _parse_result(result)
+        assert not is_error
+        assert data["total"] == 2
+        slugs_found = {(r["source_slug"], r["target_slug"]) for r in data["results"]}
+        assert ("product:p0", "product:p1") in slugs_found
+        assert ("component:c0", "product:p0") in slugs_found
+
+    @pytest.mark.asyncio
+    async def test_two_slug_lookup_spans_multiple_composite_keys(
+        self, mk_search_rel, multi_key_store
+    ):
+        """Two-slug lookup should find across all matching keys."""
+        p0 = EntityInstance(slug="product:p0", properties={"title": "P0"})
+        c0 = EntityInstance(slug="component:c0", properties={"title": "C0"})
+        multi_key_store.upsert_entity(p0)
+        multi_key_store.upsert_entity(c0)
+
+        rel_cp = RelationshipInstance(
+            source_entity_type="Component",
+            source_slug="component:c0",
+            target_entity_type="Product",
+            target_slug="product:p0",
+            relationship_type="REFERENCES",
+            properties={},
+        )
+        multi_key_store.upsert_relationship(rel_cp)
+
+        result = await mk_search_rel.handler(
+            {
+                "relationship_type": "REFERENCES",
+                "slug": "component:c0",
+                "second_slug": "product:p0",
+            }
+        )
+        is_error, data = _parse_result(result)
+        assert not is_error
+        assert len(data) == 1
+        assert data[0]["composite_key"] == "Component|REFERENCES|Product"
+
+    @pytest.mark.asyncio
+    async def test_list_all_spans_multiple_composite_keys(
+        self, mk_search_rel, multi_key_store
+    ):
+        """List All should aggregate instances across all matching keys."""
+        p0 = EntityInstance(slug="product:p0", properties={"title": "P0"})
+        p1 = EntityInstance(slug="product:p1", properties={"title": "P1"})
+        c0 = EntityInstance(slug="component:c0", properties={"title": "C0"})
+        multi_key_store.upsert_entity(p0)
+        multi_key_store.upsert_entity(p1)
+        multi_key_store.upsert_entity(c0)
+
+        rel_pp = RelationshipInstance(
+            source_entity_type="Product",
+            source_slug="product:p0",
+            target_entity_type="Product",
+            target_slug="product:p1",
+            relationship_type="REFERENCES",
+            properties={},
+        )
+        rel_cp = RelationshipInstance(
+            source_entity_type="Component",
+            source_slug="component:c0",
+            target_entity_type="Product",
+            target_slug="product:p0",
+            relationship_type="REFERENCES",
+            properties={},
+        )
+        multi_key_store.upsert_relationship(rel_pp)
+        multi_key_store.upsert_relationship(rel_cp)
+
+        result = await mk_search_rel.handler(
+            {
+                "relationship_type": "REFERENCES",
+                "list_instances": True,
+                "show_all": True,
+            }
+        )
+        is_error, data = _parse_result(result)
+        assert not is_error
+        assert data["total"] == 2
 
 
 class TestSearchEntitiesReadOnlyHint:

@@ -1,6 +1,6 @@
 # Task 007: Agent Tools — All Five Extraction Tools
 
-**Status:** `needs-revision`
+**Status:** `ready-for-review`
 **Spec Reference:** specs/agent/agent-tools.md
 **Branch:** task-007
 **PR:** #7

@@ -34,11 +34,22 @@ def _err(text: str) -> dict[str, Any]:
     return {"content": [{"type": "text", "text": text}], "is_error": True}
 
 
-def _entity_to_dict(entity: EntityInstance) -> dict[str, Any]:
-    """Serialize an entity instance for tool output."""
+def _entity_to_dict(
+    entity: EntityInstance, ontology: Ontology | None = None
+) -> dict[str, Any]:
+    """Serialize an entity instance for tool output.
+
+    When ontology is provided, entity_type is resolved to PascalCase.
+    Otherwise uses the raw kebab-case entity_type from the slug prefix.
+    """
+    entity_type: str = entity.entity_type
+    if ontology is not None:
+        type_def = ontology.find_entity_type_for_slug(entity.slug)
+        if type_def is not None:
+            entity_type = type_def.type
     return {
         "slug": entity.slug,
-        "entity_type": entity.entity_type,
+        "entity_type": entity_type,
         "properties": dict(entity.properties),
     }
 
@@ -84,6 +95,9 @@ class SearchRelationshipsInput(TypedDict):
     ]
     slug: NotRequired[Annotated[str, "Filter by this slug (source or target)"]]
     second_slug: NotRequired[Annotated[str, "Second slug for pair lookup"]]
+    list_instances: NotRequired[
+        Annotated[bool, "Return instances instead of type definition (List All mode)"]
+    ]
     limit: NotRequired[Annotated[int, "Max results to return (default 10)"]]
     show_all: NotRequired[Annotated[bool, "Return all matches (no cap)"]]
 
@@ -150,10 +164,7 @@ def create_extraction_tools(
             entities = store.search_entities_by_slugs(slugs, worker_id=worker_id)
             if not entities:
                 return _err("No entities found for the given slugs.")
-            results = []
-            for e in entities:
-                d = _entity_to_dict(e)
-                results.append(d)
+            results = [_entity_to_dict(e, ontology) for e in entities]
             return _ok(json.dumps(results, indent=2))
 
         # Mode: Get by file_path
@@ -163,7 +174,7 @@ def create_extraction_tools(
             )
             if not entities:
                 return _err(f"No entities found with file_path={file_path!r}.")
-            results = [_entity_to_dict(e) for e in entities]
+            results = [_entity_to_dict(e, ontology) for e in entities]
             return _ok(json.dumps(results, indent=2))
 
         # All remaining modes require entity_type
@@ -258,6 +269,7 @@ def create_extraction_tools(
         relationship_type = args.get("relationship_type")
         slug = args.get("slug")
         second_slug = args.get("second_slug")
+        list_instances = args.get("list_instances", False)
         limit = args.get("limit", 10)
         show_all = args.get("show_all", False)
 
@@ -269,8 +281,10 @@ def create_extraction_tools(
         if not composite_keys:
             return _err(f"No relationship type found matching {relationship_type!r}.")
 
-        # Mode: Type Definition (no slug)
-        if slug is None:
+        effective_limit = 999999999 if show_all else limit
+
+        # Mode: Type Definition (no slug, not requesting instances)
+        if slug is None and not list_instances:
             results = []
             for ck in composite_keys:
                 rel_type_def = ontology.get_relationship_type(ck)
@@ -295,40 +309,57 @@ def create_extraction_tools(
                 )
             return _ok(json.dumps(results, indent=2))
 
-        # Mode: List by Slug (one or two slugs)
-        # Use the first composite key for slug-based lookups
-        ck = composite_keys[0]
+        # Mode: List All (list_instances=True, no slug)
+        if slug is None and list_instances:
+            all_rels: list[RelationshipInstance] = []
+            for ck in composite_keys:
+                rels, _ = store.search_relationships_by_type(
+                    ck, worker_id=worker_id, limit=999999999
+                )
+                all_rels.extend(rels)
+            total = len(all_rels)
+            capped = all_rels[:effective_limit]
+            results = [_relationship_to_dict(r) for r in capped]
+            output: dict[str, Any] = {"results": results, "total": total}
+            if not show_all and total > len(capped):
+                output["warning"] = (
+                    f"Showing {len(capped)} of {total} results. "
+                    f"Use show_all=true or increase limit to see more."
+                )
+            return _ok(json.dumps(output, indent=2))
 
+        # Mode: List by Slug (one or two slugs)
+        # Search across ALL matching composite keys
         if second_slug is not None:
             # Two slugs: specific relationship between that pair
-            rels, total = store.search_relationships_by_type(
-                ck, worker_id=worker_id, limit=999999999
-            )
-            # Filter to the specific pair
-            matches = [
-                r
-                for r in rels
-                if (r.source_slug == slug and r.target_slug == second_slug)
-                or (r.source_slug == second_slug and r.target_slug == slug)
-            ]
+            matches: list[RelationshipInstance] = []
+            for ck in composite_keys:
+                rels, _ = store.search_relationships_by_type(
+                    ck, worker_id=worker_id, limit=999999999
+                )
+                for r in rels:
+                    if (r.source_slug == slug and r.target_slug == second_slug) or (
+                        r.source_slug == second_slug and r.target_slug == slug
+                    ):
+                        matches.append(r)
             results = [_relationship_to_dict(r) for r in matches]
             return _ok(json.dumps(results, indent=2))
 
-        # One slug: relationships involving this slug
-        if show_all:
-            rels, total = store.search_relationships_by_slug(
+        # One slug: relationships involving this slug across all composite keys
+        assert slug is not None  # guarded by slug is None branches above
+        all_matches: list[RelationshipInstance] = []
+        for ck in composite_keys:
+            rels, _ = store.search_relationships_by_slug(
                 ck, slug, worker_id=worker_id, limit=999999999
             )
-        else:
-            rels, total = store.search_relationships_by_slug(
-                ck, slug, worker_id=worker_id, limit=limit
-            )
-
-        results = [_relationship_to_dict(r) for r in rels]
-        output: dict[str, Any] = {"results": results, "total": total}
-        if not show_all and total > len(rels):
+            all_matches.extend(rels)
+        total = len(all_matches)
+        capped = all_matches[:effective_limit]
+        results = [_relationship_to_dict(r) for r in capped]
+        output = {"results": results, "total": total}
+        if not show_all and total > len(capped):
             output["warning"] = (
-                f"Showing {len(rels)} of {total} results. "
+                f"Showing {len(capped)} of {total} results. "
                 f"Use show_all=true or increase limit to see more."
             )
         return _ok(json.dumps(output, indent=2))
