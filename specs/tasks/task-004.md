@@ -54,3 +54,4 @@ Reference: specs/process/output-format.md.
 
 - `0f26200` — chore(task-004): begin implementation
 - `7567e4e` — chore(task-004): add PR number
+- `7bc8cb6` — feat(task-004): implement JSONL mutation writer and ID generation
