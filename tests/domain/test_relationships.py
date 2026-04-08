@@ -37,6 +37,26 @@ class TestRelationshipInstanceCreation:
         assert rel.properties["weight"] == 5
         assert rel.properties["label"] == "primary"
 
+    def test_relationship_properties_accept_any_type(self) -> None:
+        """Spec section 3.1 describes relationship properties as a generic object
+        with no type constraints — unlike entity properties (section 2.3)."""
+        rel = RelationshipInstance(
+            source_entity_type="Product",
+            source_slug="product:openshift",
+            target_entity_type="Repo",
+            target_slug="repo:my-repo",
+            relationship_type="OWNS",
+            properties={
+                "weight": 0.75,
+                "metadata": {"nested": "object"},
+                "count": 42,
+                "active": True,
+                "label": "primary",
+            },
+        )
+        assert rel.properties["weight"] == 0.75
+        assert rel.properties["metadata"] == {"nested": "object"}
+
     def test_composite_key(self) -> None:
         rel = RelationshipInstance(
             source_entity_type="TestSuite",

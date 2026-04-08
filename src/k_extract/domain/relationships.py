@@ -7,10 +7,9 @@ identity and referential integrity.
 from __future__ import annotations
 
 import re
+from typing import Any
 
 from pydantic import BaseModel, field_validator
-
-from k_extract.domain.entities import PropertyValue
 
 PASCAL_CASE_RE = re.compile(r"^[A-Z][a-zA-Z0-9]*$")
 SLUG_RE = re.compile(r"^[a-z][a-z0-9-]*:[a-z0-9][a-z0-9_-]*$")
@@ -29,7 +28,7 @@ class RelationshipInstance(BaseModel):
     target_entity_type: str
     target_slug: str
     relationship_type: str
-    properties: dict[str, PropertyValue]
+    properties: dict[str, Any]
 
     @field_validator("source_entity_type", "target_entity_type")
     @classmethod

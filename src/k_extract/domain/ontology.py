@@ -240,14 +240,7 @@ class Ontology(BaseModel):
                 )
 
         # Check property types
-        all_known = set(entity_type_def.required_properties) | set(
-            entity_type_def.optional_properties
-        )
         for prop_name, prop_value in entity.properties.items():
-            if prop_name not in all_known:
-                errors.append(
-                    f"Unknown property {prop_name!r} on entity {entity.slug!r}"
-                )
             if not _is_valid_property_value(prop_value):
                 errors.append(
                     f"Invalid property type for {prop_name!r} on entity "

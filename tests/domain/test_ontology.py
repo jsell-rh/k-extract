@@ -552,18 +552,20 @@ class TestEntityValidation:
         assert any("Missing required property 'name'" in e for e in errors)
         assert any("Missing required property 'description'" in e for e in errors)
 
-    def test_unknown_property(self) -> None:
+    def test_extra_properties_accepted(self) -> None:
+        """Spec section 4.1 does not reject unknown properties — only required
+        properties, property types, tags, slug presence, and slug uniqueness."""
         ontology = _sample_ontology()
         entity = EntityInstance(
             slug="product:test",
             properties={
                 "name": "Test",
                 "description": "Desc",
-                "unknown_prop": "value",
+                "extra_metadata": "value",
             },
         )
         errors = ontology.validate_entity(entity)
-        assert any("Unknown property 'unknown_prop'" in e for e in errors)
+        assert errors == []
 
     def test_valid_tags(self) -> None:
         ontology = _sample_ontology()
