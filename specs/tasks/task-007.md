@@ -1,6 +1,6 @@
 # Task 007: Agent Tools — All Five Extraction Tools
 
-**Status:** `in-progress`
+**Status:** `ready-for-review`
 **Spec Reference:** specs/agent/agent-tools.md
 **Branch:** task-007
 **PR:** #7
@@ -73,4 +73,4 @@ Reference: specs/agent/agent-tools.md.
 
 ## Relevant Commits
 
-(none yet)
+- `pending` — feat(task-007): implement all five agent extraction tools
