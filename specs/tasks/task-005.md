@@ -1,8 +1,8 @@
 # Task 005: Database Layer — SQLAlchemy Models and Job Lifecycle
 
-**Status:** `not-started`
+**Status:** `in-progress`
 **Spec Reference:** specs/process/job-lifecycle.md, specs/concurrency/concurrency-model.md
-**Branch:** (none)
+**Branch:** task-005
 **PR:** (none)
 **Review:** (none)
 
