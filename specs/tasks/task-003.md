@@ -1,6 +1,6 @@
 # Task 003: Config Schema — extraction.yaml Parsing and Validation
 
-**Status:** `in-progress`
+**Status:** `ready-for-review`
 **Spec Reference:** specs/process/config-schema.md
 **Branch:** task-003
 **PR:** #3
@@ -55,4 +55,5 @@ Reference: specs/process/config-schema.md.
 
 ## Relevant Commits
 
-(none yet)
+- `622b16d` — chore(task-003): begin implementation
+- `175eac9` — chore(task-003): add PR number
