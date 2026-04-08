@@ -1,8 +1,8 @@
 # Task 002: Domain Model — Ontology Type Definitions and Instances
 
-**Status:** `not-started`
+**Status:** `in-progress`
 **Spec Reference:** specs/domain/domain-model.md
-**Branch:** (none)
+**Branch:** task-002
 **PR:** (none)
 **Review:** (none)
 
