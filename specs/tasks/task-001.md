@@ -1,6 +1,6 @@
 # Task 001: Project Scaffolding and CI Setup
 
-**Status:** `in-progress`
+**Status:** `ready-for-review`
 **Spec Reference:** specs/decisions/technology-choices.md
 **Branch:** task-001
 **PR:** #1
