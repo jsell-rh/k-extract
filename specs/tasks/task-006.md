@@ -71,3 +71,4 @@ Reference: specs/domain/domain-model.md Section 5 (Ontology Operations), specs/c
 - `fe4f6f3` — chore(task-006): add PR number
 - `b5d4917` — feat(task-006): implement ontology store with staging and validate-and-commit
 - `17b6f3e` — fix(task-006): merge relationship properties in virtual view and commit path
+- `ff5431a` — fix(task-006): add structural protection for relationship types
