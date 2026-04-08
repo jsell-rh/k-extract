@@ -3,7 +3,7 @@
 **Status:** `in-progress`
 **Spec Reference:** specs/process/guided-session.md
 **Branch:** task-011
-**PR:** (none)
+**PR:** #11
 **Review:** (none)
 
 ## Description
