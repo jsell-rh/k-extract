@@ -3,7 +3,7 @@
 **Status:** `in-progress`
 **Spec Reference:** specs/agent/agent-tools.md
 **Branch:** task-007
-**PR:** (none)
+**PR:** #7
 **Review:** (none)
 
 ## Description
