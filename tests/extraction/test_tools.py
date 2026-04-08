@@ -755,6 +755,8 @@ class TestManageEntity:
         is_error, data = _parse_result(result)
         assert not is_error
         assert data["status"] == "staged"
+        # Verify entity_type is PascalCase (cross-tool format consistency)
+        assert data["entity"]["entity_type"] == "Product"
         # Verify original properties preserved
         assert data["entity"]["properties"]["title"] == "Item 0"
         assert data["entity"]["properties"]["summary"] == "A new summary"

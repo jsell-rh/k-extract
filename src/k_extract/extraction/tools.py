@@ -440,7 +440,7 @@ def create_extraction_tools(
 
         return _ok(
             json.dumps(
-                {"status": "staged", "entity": _entity_to_dict(updated)},
+                {"status": "staged", "entity": _entity_to_dict(updated, ontology)},
                 indent=2,
             )
         )
