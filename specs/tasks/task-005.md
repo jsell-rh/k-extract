@@ -1,6 +1,6 @@
 # Task 005: Database Layer — SQLAlchemy Models and Job Lifecycle
 
-**Status:** `ready-for-review`
+**Status:** `complete`
 **Spec Reference:** specs/process/job-lifecycle.md, specs/concurrency/concurrency-model.md
 **Branch:** task-005
 **PR:** #5
@@ -67,3 +67,4 @@ Reference: specs/process/job-lifecycle.md, specs/concurrency/concurrency-model.m
 - `1e75666` — chore(task-005): begin implementation
 - `0dbc738` — chore(task-005): add PR number
 - `b7d5b88` — feat(task-005): implement database layer and job lifecycle
+- Merged via PR #5
