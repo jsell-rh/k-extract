@@ -1,6 +1,6 @@
 # Task 011: Guided Session — `k-extract init` Interactive Flow
 
-**Status:** `ready-for-review`
+**Status:** `complete`
 **Spec Reference:** specs/process/guided-session.md
 **Branch:** task-011
 **PR:** #11
@@ -69,3 +69,4 @@ Reference: specs/process/guided-session.md.
 ## Relevant Commits
 
 - `8b09094` — feat(task-011): implement k-extract init guided session
+- Merged via PR #11
