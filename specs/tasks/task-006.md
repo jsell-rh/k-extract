@@ -1,8 +1,8 @@
 # Task 006: Ontology Store — SQLite-backed Shared State with Staging
 
-**Status:** `not-started`
+**Status:** `in-progress`
 **Spec Reference:** specs/domain/domain-model.md (Section 5), specs/concurrency/concurrency-model.md
-**Branch:** (none)
+**Branch:** task-006
 **PR:** (none)
 **Review:** (none)
 
