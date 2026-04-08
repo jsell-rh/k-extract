@@ -1,10 +1,10 @@
 # Task 011: Guided Session — `k-extract init` Interactive Flow
 
-**Status:** `ready-for-review`
+**Status:** `needs-revision`
 **Spec Reference:** specs/process/guided-session.md
 **Branch:** task-011
 **PR:** #11
-**Review:** (none)
+**Review:** specs/reviews/task-011.md
 
 ## Description
 
