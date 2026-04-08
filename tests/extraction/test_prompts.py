@@ -182,6 +182,31 @@ class TestBuildGuidancePrompt:
         assert "TestCase" in prompt
         assert "Component" in prompt
 
+    def test_includes_relationship_optional_properties(self) -> None:
+        ontology = OntologyConfig(
+            entity_types=[
+                EntityTypeConfig(
+                    label="Service",
+                    description="A service",
+                    required_properties=["name"],
+                    optional_properties=[],
+                    tag_definitions={},
+                ),
+            ],
+            relationship_types=[
+                RelationshipTypeConfig(
+                    label="CALLS",
+                    description="Service calls another",
+                    source_entity_type="Service",
+                    target_entity_type="Service",
+                    required_properties=["protocol"],
+                    optional_properties=["latency", "timeout"],
+                ),
+            ],
+        )
+        prompt = build_guidance_prompt(ontology, "test")
+        assert "Optional properties: latency, timeout" in prompt
+
     def test_no_properties_shows_none(self) -> None:
         ontology = OntologyConfig(
             entity_types=[
@@ -264,6 +289,13 @@ class TestComposeSystemPrompt:
         assert "{extraction_guidance}" not in result
         assert "My custom guidance" in result
 
+    def test_guidance_with_literal_braces(self) -> None:
+        """LLM-generated guidance containing braces must not crash."""
+        guidance = 'Use format {"type": "Entity"} for output.'
+        result = compose_system_prompt(guidance)
+        assert guidance in result
+        assert "{extraction_guidance}" not in result
+
 
 # --- load_job_description_template ---
 
@@ -322,3 +354,23 @@ class TestSubstituteJobVariables:
             file_list="a.py\nb.py\nc.py",
         )
         assert result == ("Job abc: 3 files, 999 chars\na.py\nb.py\nc.py")
+
+    def test_literal_braces_in_user_edited_template(self) -> None:
+        """Templates with literal braces (e.g., JSON examples) must not crash."""
+        template = (
+            "Job {job_id}: process {file_count} files.\n"
+            'Example output: {"entity": "test"}\n'
+            "{file_list}\n"
+            "Total: {total_characters} chars"
+        )
+        result = substitute_job_variables(
+            template,
+            job_id="j1",
+            file_count=2,
+            total_characters=500,
+            file_list="- a.py",
+        )
+        assert "j1" in result
+        assert '{"entity": "test"}' in result
+        assert "- a.py" in result
+        assert "500" in result

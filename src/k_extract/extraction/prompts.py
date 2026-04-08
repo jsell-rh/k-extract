@@ -67,10 +67,14 @@ def build_guidance_prompt(ontology: OntologyConfig, problem_statement: str) -> s
         props = (
             ", ".join(rt.required_properties) if rt.required_properties else "(none)"
         )
+        opt_props = (
+            ", ".join(rt.optional_properties) if rt.optional_properties else "(none)"
+        )
         rel_sections.append(
             f"- {rt.label}: {rt.description}\n"
             f"  Source: {rt.source_entity_type} -> Target: {rt.target_entity_type}\n"
-            f"  Required properties: {props}"
+            f"  Required properties: {props}\n"
+            f"  Optional properties: {opt_props}"
         )
 
     return (
@@ -130,7 +134,7 @@ def compose_system_prompt(extraction_guidance: str) -> str:
         The complete system prompt ready to store in the config.
     """
     template = load_template("system_prompt.txt")
-    return template.format(extraction_guidance=extraction_guidance)
+    return template.replace("{extraction_guidance}", extraction_guidance)
 
 
 def load_job_description_template() -> str:
@@ -167,9 +171,9 @@ def substitute_job_variables(
     Returns:
         The job description with all variables substituted.
     """
-    return template.format(
-        job_id=job_id,
-        file_count=file_count,
-        total_characters=total_characters,
-        file_list=file_list,
-    )
+    result = template
+    result = result.replace("{job_id}", str(job_id))
+    result = result.replace("{file_count}", str(file_count))
+    result = result.replace("{total_characters}", str(total_characters))
+    result = result.replace("{file_list}", file_list)
+    return result
