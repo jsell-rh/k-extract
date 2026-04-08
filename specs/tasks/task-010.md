@@ -1,6 +1,6 @@
 # Task 010: Agent Architecture — Instantiation, Message Loop, and Observability
 
-**Status:** `in-progress`
+**Status:** `ready-for-review`
 **Spec Reference:** specs/agent/agent-architecture.md, specs/decisions/technology-choices.md (Logging)
 **Branch:** task-010
 **PR:** #10
@@ -75,4 +75,4 @@ Reference: specs/agent/agent-architecture.md, specs/decisions/technology-choices
 
 ## Relevant Commits
 
-(none yet)
+- `pending` — feat(task-010): agent architecture — instantiation, message loop, observability
