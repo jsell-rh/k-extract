@@ -1,10 +1,10 @@
 # Task 006: Ontology Store — SQLite-backed Shared State with Staging
 
-**Status:** `not-started`
+**Status:** `complete`
 **Spec Reference:** specs/domain/domain-model.md (Section 5), specs/concurrency/concurrency-model.md
-**Branch:** (none)
-**PR:** (none)
-**Review:** (none)
+**Branch:** task-006
+**PR:** #6
+**Review:** specs/reviews/task-006.md
 
 ## Description
 
@@ -67,4 +67,9 @@ Reference: specs/domain/domain-model.md Section 5 (Ontology Operations), specs/c
 
 ## Relevant Commits
 
-(none yet)
+- `8309def` — chore(task-006): begin implementation
+- `fe4f6f3` — chore(task-006): add PR number
+- `b5d4917` — feat(task-006): implement ontology store with staging and validate-and-commit
+- `17b6f3e` — fix(task-006): merge relationship properties in virtual view and commit path
+- `ff5431a` — fix(task-006): add structural protection for relationship types
+- Merged via PR #6
