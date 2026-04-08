@@ -1,8 +1,8 @@
 # Task 007: Agent Tools — All Five Extraction Tools
 
-**Status:** `not-started`
+**Status:** `in-progress`
 **Spec Reference:** specs/agent/agent-tools.md
-**Branch:** (none)
+**Branch:** task-007
 **PR:** (none)
 **Review:** (none)
 
