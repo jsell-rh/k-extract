@@ -1,8 +1,8 @@
 # Task 008: Prompt Generation — Template Composition and LLM Guidance
 
-**Status:** `not-started`
+**Status:** `in-progress`
 **Spec Reference:** specs/agent/prompt-generation.md, specs/agent/prompt-patterns.md
-**Branch:** (none)
+**Branch:** task-008
 **PR:** (none)
 **Review:** (none)
 
