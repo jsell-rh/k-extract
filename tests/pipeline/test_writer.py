@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
@@ -128,6 +129,34 @@ class TestJsonlWriter:
 
         lines = output_path.read_text().strip().split("\n")
         assert len(lines) == 20
+        for line in lines:
+            parsed = json.loads(line)
+            assert parsed["op"] == "CREATE"
+
+    @pytest.mark.asyncio()
+    async def test_concurrent_threaded_writes(self, output_path: Path) -> None:
+        """Concurrent writes from multiple threads don't corrupt the output."""
+        writer = JsonlWriter(output_path)
+
+        def thread_work(thread_id: int) -> None:
+            loop = asyncio.new_event_loop()
+            try:
+                for i in range(10):
+                    loop.run_until_complete(
+                        writer.write_operation(
+                            _make_create(f"person:t{thread_id}-p{i}")
+                        )
+                    )
+            finally:
+                loop.close()
+
+        with ThreadPoolExecutor(max_workers=4) as executor:
+            futures = [executor.submit(thread_work, t) for t in range(4)]
+            for f in futures:
+                f.result()
+
+        lines = output_path.read_text().strip().split("\n")
+        assert len(lines) == 40
         for line in lines:
             parsed = json.loads(line)
             assert parsed["op"] == "CREATE"

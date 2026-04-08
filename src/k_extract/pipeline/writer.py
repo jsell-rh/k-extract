@@ -6,8 +6,8 @@ from an interrupted run is always valid JSONL.
 
 from __future__ import annotations
 
-import asyncio
 import json
+import threading
 from pathlib import Path
 
 from k_extract.domain.mutations import MutationOperation
@@ -16,13 +16,13 @@ from k_extract.domain.mutations import MutationOperation
 class JsonlWriter:
     """Streaming JSONL writer that appends one JSON line per operation.
 
-    Thread-safe and async-safe via an asyncio lock. Each write is
+    Thread-safe and async-safe via a threading lock. Each write is
     flushed immediately so partial output is always valid.
     """
 
     def __init__(self, path: Path) -> None:
         self._path = path
-        self._lock = asyncio.Lock()
+        self._lock = threading.Lock()
 
     @property
     def path(self) -> Path:
@@ -32,14 +32,13 @@ class JsonlWriter:
     async def write_operation(self, operation: MutationOperation) -> None:
         """Write a single operation as one JSON line.
 
-        Acquires an async lock, appends the JSON line, and flushes.
+        Acquires the lock, appends the JSON line, and flushes.
         """
         line = json.dumps(
             operation.model_dump(exclude_none=True), separators=(",", ":")
         )
-        async with self._lock:
-            with self._path.open("a") as f:
-                f.write(line + "\n")
+        with self._lock, self._path.open("a") as f:
+            f.write(line + "\n")
 
     async def write_operations(self, operations: list[MutationOperation]) -> None:
         """Write multiple operations as consecutive JSON lines.
@@ -51,7 +50,6 @@ class JsonlWriter:
             json.dumps(op.model_dump(exclude_none=True), separators=(",", ":"))
             for op in operations
         ]
-        async with self._lock:
-            with self._path.open("a") as f:
-                for line in lines:
-                    f.write(line + "\n")
+        with self._lock, self._path.open("a") as f:
+            for line in lines:
+                f.write(line + "\n")
