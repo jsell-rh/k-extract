@@ -69,3 +69,4 @@ Set up the foundational project structure, packaging, pre-commit hooks, and CI p
 ## Relevant Commits
 
 - `251d28d` — feat(task-001): project scaffolding and CI setup
+- `52252ef` — fix(task-001): address review findings — CI install and test mirroring
