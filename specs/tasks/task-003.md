@@ -1,8 +1,8 @@
 # Task 003: Config Schema — extraction.yaml Parsing and Validation
 
-**Status:** `not-started`
+**Status:** `in-progress`
 **Spec Reference:** specs/process/config-schema.md
-**Branch:** (none)
+**Branch:** task-003
 **PR:** (none)
 **Review:** (none)
 
