@@ -66,3 +66,4 @@ Reference: specs/process/job-lifecycle.md, specs/concurrency/concurrency-model.m
 
 - `1e75666` — chore(task-005): begin implementation
 - `0dbc738` — chore(task-005): add PR number
+- `b7d5b88` — feat(task-005): implement database layer and job lifecycle
