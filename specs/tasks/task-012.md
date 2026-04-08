@@ -3,7 +3,7 @@
 **Status:** `in-progress`
 **Spec Reference:** specs/process/extraction-pipeline.md, specs/concurrency/concurrency-model.md
 **Branch:** task-012
-**PR:** (none)
+**PR:** #12
 **Review:** (none)
 
 ## Description
