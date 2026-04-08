@@ -1,10 +1,10 @@
 # Task 007: Agent Tools — All Five Extraction Tools
 
-**Status:** `not-started`
+**Status:** `complete`
 **Spec Reference:** specs/agent/agent-tools.md
-**Branch:** (none)
-**PR:** (none)
-**Review:** (none)
+**Branch:** task-007
+**PR:** #7
+**Review:** specs/reviews/task-007.md
 
 ## Description
 
@@ -73,4 +73,7 @@ Reference: specs/agent/agent-tools.md.
 
 ## Relevant Commits
 
-(none yet)
+- `15e410e` — feat(task-007): implement all five agent extraction tools
+- `2d92abe` — fix(task-007): address review round 1 findings
+- `6707e50` — fix(task-007): pass ontology to _entity_to_dict in manage_entity response
+- Merged via PR #7
