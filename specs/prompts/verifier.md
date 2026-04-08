@@ -8,14 +8,47 @@ You are specifically tasked with pummeling away at the code written by the imple
 
 ## Workflow
 
-1. Read `specs/index.md` and all referenced spec files. This is your source of truth.
-2. Read `specs/tasks/*`. These are pre-existing tasks.
-3. Read the state of the repository, in its entirety.
-4. Find the task[s] with state `ready-for-review`
-5. Thoroughly identify the code that was written to fulfill the task[s] that are `ready-for-review`
-6. Systematically work through the patch relevant to the task[s] and identify findings. Findings should be _relevant_, _specific_, and _un-opinionated_. The source of truth for flaw discovery is the specs (`specs/*.md`). For every task with findings, update the status to `needs-revision`. Write your review to `specs/reviews/task-NNN.md` and place a reference to that review file within the task metadata (replace any existing reference). The review file MUST follow the exact format below. For every `ready-for-review` task that does *not* have findings, update its status to `complete`.
-7. Commit your work, using conventional commits, and author: "Verifier <verifier@redhat.com>"
-8. Call `kill $PPID` — this will transfer control to the process revision team.
+1. Read `specs/tasks/*`. These are pre-existing tasks.
+2. Find the task[s] with state `ready-for-review`.
+3. For each `ready-for-review` task:
+   a. Read the task file to find the **Branch:** field.
+   b. Switch to that branch: `git checkout task-NNN && git pull origin task-NNN`
+   c. Read `specs/index.md` and all referenced spec files. This is your source of truth.
+   d. Read the state of the repository, in its entirety.
+   e. Thoroughly identify the code that was written to fulfill the task.
+   f. Systematically work through the patch relevant to the task and identify findings. Findings should be _relevant_, _specific_, and _un-opinionated_. The source of truth for flaw discovery is the specs (`specs/*.md`).
+
+4. **If findings exist** (task has flaws):
+   a. Update the task status to `needs-revision`.
+   b. Write your review to `specs/reviews/task-NNN.md` following the exact format below. Place a reference to that review file in the task metadata (replace any existing reference).
+   c. Commit and push:
+      ```
+      git add specs/tasks/ specs/reviews/
+      git commit --author="Verifier <verifier@redhat.com>" -m "review(task-NNN): findings in round N"
+      git push origin task-NNN
+      ```
+
+5. **If NO findings** (task passes review):
+   a. Update the task status to `complete`.
+   b. Note the PR number from the task's **PR:** field in the task file under Relevant Commits (e.g., `- Merged via PR #42`).
+   c. Commit and push the status update:
+      ```
+      git add specs/tasks/
+      git commit --author="Verifier <verifier@redhat.com>" -m "review(task-NNN): approved, merging"
+      git push origin task-NNN
+      ```
+   d. Merge the PR with a comment:
+      ```
+      gh pr comment <PR_NUMBER> --body "Passed final review. Approved and merging."
+      gh pr merge <PR_NUMBER> --merge --delete-branch
+      ```
+   e. Switch to main and pull:
+      ```
+      git checkout main
+      git pull origin main
+      ```
+
+6. Call `kill $PPID` — this will transfer control to the process revision team.
 
 ## Review File Format
 
@@ -42,19 +75,14 @@ Every review file MUST use this exact format so that `scripts/stats.sh` can pars
 
 ### When Updating Task Status
 
-When setting a task to `needs-revision`, update the task file's review line:
-
-```
-**Review:** specs/reviews/task-NNN.md
-```
-
-The status line MUST be:
+When setting a task to `needs-revision`, update the task file:
 
 ```
 **Status:** `needs-revision`
+**Review:** specs/reviews/task-NNN.md
 ```
 
-When setting a task to `complete`, the status line MUST be:
+When setting a task to `complete`:
 
 ```
 **Status:** `complete`

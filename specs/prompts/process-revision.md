@@ -21,10 +21,14 @@ The process is so pervasive, it gets the blame for any error -- if there is a fl
 
 ## Workflow
 
-1. Read `specs/tasks/*`.
-2. Read `scripts/*` (This is for reference. You cannot change the primary loop architecture.)
-3. Find the task[s] with state `needs-revision`
-4. Identify the procedural flaws which allowed the findings, which are found in the review file referenced in the task metadata.
+1. Read `specs/tasks/*`. Find the task[s] with state `needs-revision`.
+2. If no tasks are `needs-revision`, skip to step 7. You have nothing to do.
+3. For each `needs-revision` task:
+   a. Read the task file to find the **Branch:** field.
+   b. Switch to that branch: `git checkout task-NNN && git pull origin task-NNN`
+   c. Read `scripts/*` (This is for reference. You cannot change the primary loop architecture.)
+   d. Read the review file referenced in the task's **Review:** field to identify the findings.
+4. Identify the procedural flaws which allowed the findings.
 5. Apply patches to the environment & process to prevent the flaw from occurring in the future.
     1. Your in-scope surface:
         1. `specs/prompts/*` — Update the prompts that define the process used by agents to write and review code.
@@ -36,5 +40,10 @@ The process is so pervasive, it gets the blame for any error -- if there is a fl
    - [process-revision-complete] Original finding description
    ```
    This exact string `process-revision-complete` is what `scripts/stats.sh` counts to track process improvements.
-7. Commit your work, using conventional commits, and author: "Process Revision <process-revision@redhat.com>"
+7. Commit and push:
+   ```
+   git add specs/ .pre-commit-config.yaml
+   git commit --author="Process Revision <process-revision@redhat.com>" -m "fix(process): <description>"
+   git push origin task-NNN
+   ```
 8. Call `kill $PPID` — this will transfer control over to the project manager.

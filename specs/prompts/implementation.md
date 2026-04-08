@@ -77,20 +77,46 @@ Follow the [Domain Oriented Observability](https://martinfowler.com/articles/dom
 
 ## Workflow
 
-1. Read `specs/index.md` and all referenced spec files. This is your source of truth, and overarching vision.
-2. Read `specs/tasks/*`. See what work has been done, and determine the next task to complete. Valid progress is `not-started` `in-progress` `ready-for-review` `complete` `needs-revision`. You should pick the task with the lowest number in its name that is either `not-started` or `needs-revision`. Prioritize `needs-revision` tasks over `not-started` ALWAYS.
-3. Update the task status to `in-progress`.
+1. Read `specs/tasks/*`. See what work has been done, and determine the next task to complete. Valid progress is `not-started` `in-progress` `ready-for-review` `complete` `needs-revision`. You should pick the task with the lowest number in its name that is either `not-started` or `needs-revision`. Prioritize `needs-revision` tasks over `not-started` ALWAYS.
+
+2. **Branch setup:**
+   - If the task is `not-started` (new task):
+     1. Ensure you are on `main` and up to date: `git checkout main && git pull origin main`
+     2. Create and switch to a new branch: `git checkout -b task-NNN`
+     3. Update the task file: set **Status:** to `in-progress`, set **Branch:** to `task-NNN`
+     4. Commit and push: `git add specs/tasks/ && git commit --author="Implementation <implementation@redhat.com>" -m "chore(task-NNN): begin implementation" && git push -u origin task-NNN`
+     5. Create a draft PR: `gh pr create --draft --title "Task NNN: <title>" --body "Implements task-NNN per specs."` 
+     6. Update the task file with the PR number: set **PR:** to the PR number (e.g., `#42`)
+     7. Commit and push the PR number update
+   - If the task is `needs-revision` (returning to existing work):
+     1. Read the task file to find the **Branch:** field
+     2. Switch to that branch: `git checkout task-NNN && git pull origin task-NNN`
+     3. Read the review file referenced in the task's **Review:** field to understand what needs fixing
+     4. Update the task status to `in-progress`
+
+3. Read `specs/index.md` and all referenced spec files. This is your source of truth, and overarching vision.
+
 4. Complete the task. Completion criteria is alignment with the task & relevant portion of the spec. A separate team is working in competition with you trying to find bugs & inconsistencies with your work. Your job is to make them not have anything to find.
+
 5. Before marking the task `ready-for-review`, run the self-verification checklist:
    1. **No dead code:** Every type, function, class, or module you defined is referenced by at least one other definition or test. If something exists only for itself, either wire it in or remove it.
    2. **Tests pass:** Run `uv run pytest` and confirm zero failures.
    3. **Type checking:** Run `uv run pyright` (or mypy) and confirm zero errors in your changes.
    4. **Lint:** Run `uv run ruff check` and confirm zero errors.
-   5. **Full task traceability:** Re-read the ENTIRE task file — description, spec excerpt, AND acceptance criteria. Every requirement stated anywhere in the task must be traceable to code. For each requirement, identify the exact line(s) of code that satisfy it. If you cannot point to code that implements a stated requirement, the task is not complete.
-   6. **No invented behavior:** Every code path must trace to a specific statement in the spec or task description. "Seems useful" or "obvious extension" is not justification for adding behavior the spec does not describe.
-   7. **Re-verify after fixes:** When addressing `needs-revision` findings, re-run the ENTIRE self-verification checklist after applying fixes. A fix for one finding can introduce a new defect.
+   5. **Pre-commit:** Run `uv run pre-commit run --all-files` and confirm all hooks pass.
+   6. **Full task traceability:** Re-read the ENTIRE task file — description, spec excerpt, AND acceptance criteria. Every requirement stated anywhere in the task must be traceable to code. For each requirement, identify the exact line(s) of code that satisfy it. If you cannot point to code that implements a stated requirement, the task is not complete.
+   7. **No invented behavior:** Every code path must trace to a specific statement in the spec or task description. "Seems useful" or "obvious extension" is not justification for adding behavior the spec does not describe.
+   8. **Re-verify after fixes:** When addressing `needs-revision` findings, re-run the ENTIRE self-verification checklist after applying fixes. A fix for one finding can introduce a new defect.
+
 6. Update the task status to `ready-for-review`.
-7. Commit your work, using conventional commits, and author: "Implementation <implementation@redhat.com>"
+
+7. Commit and push:
+   ```
+   git add -A
+   git commit --author="Implementation <implementation@redhat.com>" -m "feat(task-NNN): <description>"
+   git push origin task-NNN
+   ```
+
 8. Call `kill $PPID` — this will transfer control to the verification team.
 
 ## Task File Format
