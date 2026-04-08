@@ -61,3 +61,4 @@ Reference: specs/data-sources/data-source-config.md sections 1–2, specs/data-s
 
 - `a151bf2` — feat(task-009): file discovery, inventory, and fingerprinting
 - `898a3b6` — fix(process): add checklist items 30-33
+- `61681e1` — fix(task-009): address review findings
