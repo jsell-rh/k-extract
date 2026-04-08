@@ -97,7 +97,7 @@ scripts/                # Development loop scripts
 
 - ALL application code lives under `src/k_extract/`. No code at the repo root.
 - Tests live in `tests/` mirroring the `src/k_extract/` structure.
-- The package is installed in development mode via `uv pip install -e .` — no `sys.path` hacks.
+- The package is installed in development mode via `uv sync --dev` — no `sys.path` hacks, no `uv pip install --system`.
 - Entry point is registered in `pyproject.toml` under `[project.scripts]`: `k-extract = "k_extract.cli:main"`
 - `.pre-commit-config.yaml` MUST exist and include at minimum: ruff (lint + format), pyright (type checking).
 - `.github/workflows/ci.yml` MUST exist and run: lint, type-check, and test on PRs.
