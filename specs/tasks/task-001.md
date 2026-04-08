@@ -1,10 +1,10 @@
 # Task 001: Project Scaffolding and CI Setup
 
-**Status:** `not-started`
+**Status:** `complete`
 **Spec Reference:** specs/decisions/technology-choices.md
-**Branch:** (none)
-**PR:** (none)
-**Review:** (none)
+**Branch:** task-001
+**PR:** #1
+**Review:** specs/reviews/task-001.md
 
 ## Description
 
@@ -68,4 +68,8 @@ Set up the foundational project structure, packaging, pre-commit hooks, and CI p
 
 ## Relevant Commits
 
-(none yet)
+- `251d28d` — feat(task-001): project scaffolding and CI setup
+- `52252ef` — fix(task-001): address review findings — CI install and test mirroring
+- `2663c1d` — chore(task-001): update task status to ready-for-review
+- `0985c8f` — fix(task-001): use dependency-groups for dev deps so uv sync --dev works
+- Merged via PR #1

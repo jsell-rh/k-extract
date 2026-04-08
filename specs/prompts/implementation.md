@@ -18,7 +18,7 @@ These are general standards for Python software development. If they apply to yo
 
 - Use `src/k_extract/` as the package root — ALL application code lives here
 - Use `pyproject.toml` with uv for dependency management
-- No `sys.path` hacks — use proper package installation (`uv pip install -e .`)
+- No `sys.path` hacks — use `uv sync --dev` for local development (NOT `uv pip install`). In CI, use `uv sync --dev` or `uv run` — NEVER use `uv pip install --system` (fails on PEP 668 externally-managed environments)
 - Entry point via Click/Typer CLI, registered in pyproject.toml as `k-extract = "k_extract.cli:main"`
 - Tests live in `tests/` mirroring `src/k_extract/` structure
 - `.pre-commit-config.yaml` must include ruff (lint + format) and pyright (type checking)
@@ -104,9 +104,11 @@ Follow the [Domain Oriented Observability](https://martinfowler.com/articles/dom
    3. **Type checking:** Run `uv run pyright` (or mypy) and confirm zero errors in your changes.
    4. **Lint:** Run `uv run ruff check` and confirm zero errors.
    5. **Pre-commit:** Run `uv run pre-commit run --all-files` and confirm all hooks pass.
-   6. **Full task traceability:** Re-read the ENTIRE task file — description, spec excerpt, AND acceptance criteria. Every requirement stated anywhere in the task must be traceable to code. For each requirement, identify the exact line(s) of code that satisfy it. If you cannot point to code that implements a stated requirement, the task is not complete.
-   7. **No invented behavior:** Every code path must trace to a specific statement in the spec or task description. "Seems useful" or "obvious extension" is not justification for adding behavior the spec does not describe.
-   8. **Re-verify after fixes:** When addressing `needs-revision` findings, re-run the ENTIRE self-verification checklist after applying fixes. A fix for one finding can introduce a new defect.
+   6. **Directory structure:** Verify that `tests/` subdirectory structure mirrors `src/k_extract/` subdirectory structure. For every subdirectory in `src/k_extract/` (e.g., `cli/`, `domain/`, `config/`), a corresponding subdirectory MUST exist in `tests/` (e.g., `tests/cli/`, `tests/domain/`, `tests/config/`). Run `diff <(cd src/k_extract && find . -type d -not -name __pycache__ | sort) <(cd tests && find . -type d -not -name __pycache__ | sort)` to verify — any differences indicate a missing test subdirectory.
+   7. **CI verification:** After pushing, check that CI passes on GitHub Actions. Run `gh run list --branch task-NNN --limit 1` and verify the workflow completed successfully. If CI has not run yet, review `.github/workflows/ci.yml` line-by-line and verify each command works in a fresh ubuntu-latest environment. In particular: NEVER use `uv pip install --system` (fails on PEP 668 externally-managed Python environments on modern Ubuntu); use `uv sync --dev` instead.
+   8. **Full task traceability:** Re-read the ENTIRE task file — description, spec excerpt, AND acceptance criteria. Every requirement stated anywhere in the task must be traceable to code. For each requirement, identify the exact line(s) of code that satisfy it. If you cannot point to code that implements a stated requirement, the task is not complete.
+   9. **No invented behavior:** Every code path must trace to a specific statement in the spec or task description. "Seems useful" or "obvious extension" is not justification for adding behavior the spec does not describe.
+   10. **Re-verify after fixes:** When addressing `needs-revision` findings, re-run the ENTIRE self-verification checklist after applying fixes. A fix for one finding can introduce a new defect.
 
 6. Update the task status to `ready-for-review`.
 
