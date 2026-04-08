@@ -340,10 +340,50 @@ class TestOntologyContainer:
         with pytest.raises(ValidationError, match="does not match"):
             Ontology(entity_types={"WrongKey": product_type})
 
+    def test_entity_key_slug_mismatch_rejected(self) -> None:
+        with pytest.raises(ValidationError, match="does not match"):
+            Ontology(
+                entities={
+                    "wrong-key": EntityInstance(slug="product:test", properties={})
+                }
+            )
+
     def test_relationship_type_key_mismatch_rejected(self) -> None:
         owns_rel = _owns_rel_type()
         with pytest.raises(ValidationError, match="does not match"):
             Ontology(relationship_types={"WrongKey": owns_rel})
+
+    def test_duplicate_relationship_rejected(self) -> None:
+        rel = RelationshipInstance(
+            source_entity_type="Product",
+            source_slug="product:openshift",
+            target_entity_type="Repo",
+            target_slug="repo:my-repo",
+            relationship_type="OWNS",
+            properties={"since": "2024"},
+        )
+        with pytest.raises(ValidationError, match="Duplicate relationship"):
+            Ontology(relationships=[rel, rel])
+
+    def test_same_composite_key_different_slugs_allowed(self) -> None:
+        rel1 = RelationshipInstance(
+            source_entity_type="Product",
+            source_slug="product:a",
+            target_entity_type="Repo",
+            target_slug="repo:b",
+            relationship_type="OWNS",
+            properties={},
+        )
+        rel2 = RelationshipInstance(
+            source_entity_type="Product",
+            source_slug="product:c",
+            target_entity_type="Repo",
+            target_slug="repo:d",
+            relationship_type="OWNS",
+            properties={},
+        )
+        ontology = Ontology(relationships=[rel1, rel2])
+        assert len(ontology.relationships) == 2
 
     def test_get_entity_type(self) -> None:
         ontology = _sample_ontology()
@@ -417,6 +457,47 @@ class TestOntologyContainer:
         et = ontology.find_entity_type_for_slug("data-source:git")
         assert et is not None
         assert et.type == "DataSource"
+
+    def test_find_entity_type_for_slug_acronym(self) -> None:
+        sre_type = EntityTypeDefinition(
+            type="SREFile",
+            description="An SRE file",
+            tier=Tier.FILE_BASED,
+            required_properties=["path"],
+            optional_properties=[],
+            property_definitions={"path": "File path"},
+        )
+        ontology = Ontology(
+            entity_types={"SREFile": sre_type},
+            entities={
+                "sre-file:alert-rules": EntityInstance(
+                    slug="sre-file:alert-rules", properties={"path": "/sre/alerts"}
+                )
+            },
+        )
+        et = ontology.find_entity_type_for_slug("sre-file:alert-rules")
+        assert et is not None
+        assert et.type == "SREFile"
+
+    def test_get_entities_by_type_acronym(self) -> None:
+        sre_type = EntityTypeDefinition(
+            type="SREFile",
+            description="An SRE file",
+            tier=Tier.FILE_BASED,
+            required_properties=["path"],
+            optional_properties=[],
+            property_definitions={"path": "File path"},
+        )
+        entity = EntityInstance(
+            slug="sre-file:alert-rules", properties={"path": "/sre/alerts"}
+        )
+        ontology = Ontology(
+            entity_types={"SREFile": sre_type},
+            entities={"sre-file:alert-rules": entity},
+        )
+        results = ontology.get_entities_by_type("SREFile")
+        assert len(results) == 1
+        assert results[0].slug == "sre-file:alert-rules"
 
     def test_find_entity_type_for_slug_not_found(self) -> None:
         ontology = _sample_ontology()
@@ -510,14 +591,42 @@ class TestEntityValidation:
         errors = ontology.validate_entity(entity)
         assert any("Invalid tag 'nonexistent'" in e for e in errors)
 
-    def test_entity_with_multi_word_type_slug(self) -> None:
+    def test_structural_type_protection(self) -> None:
         ontology = _sample_ontology()
         entity = EntityInstance(
             slug="data-source:local",
             properties={"path": "/data/local"},
         )
         errors = ontology.validate_entity(entity)
+        assert len(errors) == 1
+        assert (
+            "structural type" in errors[0].lower() or "protected" in errors[0].lower()
+        )
+
+    def test_file_based_type_not_protected(self) -> None:
+        ontology = _sample_ontology()
+        entity = EntityInstance(
+            slug="product:test",
+            properties={"name": "Test", "description": "A test product"},
+        )
+        errors = ontology.validate_entity(entity)
         assert errors == []
+
+    def test_entity_with_multi_word_type_slug(self) -> None:
+        """Multi-word PascalCase types resolve correctly in slug lookup.
+
+        DataSource is structural, so validation rejects edits — but the type
+        lookup itself must still work (confirmed by getting a structural
+        protection error rather than an 'unknown type' error).
+        """
+        ontology = _sample_ontology()
+        entity = EntityInstance(
+            slug="data-source:local",
+            properties={"path": "/data/local"},
+        )
+        errors = ontology.validate_entity(entity)
+        assert len(errors) == 1
+        assert "structural" in errors[0].lower()
 
 
 # --- Relationship Validation Tests ---
@@ -645,6 +754,15 @@ class TestHelperFunctions:
 
     def test_pascal_to_kebab_three_words(self) -> None:
         assert _pascal_to_kebab("TestSuiteRunner") == "test-suite-runner"
+
+    def test_pascal_to_kebab_acronym(self) -> None:
+        assert _pascal_to_kebab("SREFile") == "sre-file"
+
+    def test_pascal_to_kebab_acronym_at_end(self) -> None:
+        assert _pascal_to_kebab("ProductSRE") == "product-sre"
+
+    def test_pascal_to_kebab_product_file(self) -> None:
+        assert _pascal_to_kebab("ProductFile") == "product-file"
 
     def test_pascal_to_kebab_single_letter(self) -> None:
         assert _pascal_to_kebab("A") == "a"

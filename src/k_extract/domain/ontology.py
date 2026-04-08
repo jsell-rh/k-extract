@@ -146,6 +146,32 @@ class Ontology(BaseModel):
                 raise ValueError(msg)
         return self
 
+    @model_validator(mode="after")
+    def validate_relationship_uniqueness(self) -> Ontology:
+        """Ensure (composite_key, source_slug, target_slug) triples are unique."""
+        seen: set[tuple[str, str, str]] = set()
+        for rel in self.relationships:
+            triple = (rel.composite_key, rel.source_slug, rel.target_slug)
+            if triple in seen:
+                msg = (
+                    f"Duplicate relationship: {rel.composite_key!r} with "
+                    f"source={rel.source_slug!r}, target={rel.target_slug!r}"
+                )
+                raise ValueError(msg)
+            seen.add(triple)
+        return self
+
+    @model_validator(mode="after")
+    def validate_entity_keys(self) -> Ontology:
+        """Ensure entities dict keys match the slug field."""
+        for key, entity in self.entities.items():
+            if key != entity.slug:
+                msg = (
+                    f"Entity dict key {key!r} does not match slug field {entity.slug!r}"
+                )
+                raise ValueError(msg)
+        return self
+
     def get_entity_type(self, type_name: str) -> EntityTypeDefinition | None:
         """Look up an entity type definition by type name."""
         return self.entity_types.get(type_name)
@@ -195,6 +221,14 @@ class Ontology(BaseModel):
         if entity_type_def is None:
             errors.append(
                 f"Unknown entity type for slug prefix: {entity.entity_type!r}"
+            )
+            return errors
+
+        # Structural type protection (spec section 4.4)
+        if entity_type_def.is_structural:
+            errors.append(
+                f"Cannot modify entity of structural type "
+                f"{entity_type_def.type!r}: protected from agent edits"
             )
             return errors
 
@@ -295,8 +329,15 @@ def _is_valid_property_value(value: object) -> bool:
 def _pascal_to_kebab(name: str) -> str:
     """Convert PascalCase to kebab-case for slug type prefix matching.
 
-    Example: 'DataSource' -> 'data-source', 'Product' -> 'product'
+    Examples:
+        'DataSource' -> 'data-source'
+        'Product' -> 'product'
+        'SREFile' -> 'sre-file'
+        'ProductFile' -> 'product-file'
     """
-    # Insert hyphen before uppercase letters that follow a lowercase letter or digit
+    # Insert hyphen between a lowercase/digit and an uppercase letter
     s = re.sub(r"([a-z0-9])([A-Z])", r"\1-\2", name)
+    # Insert hyphen between consecutive uppercase when followed by lowercase
+    # e.g., "SRE" + "File" -> "SRE-File"
+    s = re.sub(r"([A-Z]+)([A-Z][a-z])", r"\1-\2", s)
     return s.lower()
