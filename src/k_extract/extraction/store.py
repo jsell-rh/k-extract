@@ -466,7 +466,21 @@ class OntologyStore:
                 for rel in staged_rels_raw:
                     key = (rel.composite_key, rel.source_slug, rel.target_slug)
                     staged_rel_keys.add(key)
-                    rel_map[key] = rel
+                    if key in rel_map:
+                        merged_props = {
+                            **rel_map[key].properties,
+                            **rel.properties,
+                        }
+                        rel_map[key] = RelationshipInstance(
+                            source_entity_type=rel.source_entity_type,
+                            source_slug=rel.source_slug,
+                            target_entity_type=rel.target_entity_type,
+                            target_slug=rel.target_slug,
+                            relationship_type=rel.relationship_type,
+                            properties=merged_props,
+                        )
+                    else:
+                        rel_map[key] = rel
                 merged_relationships = list(rel_map.values())
 
                 # Validate
@@ -660,7 +674,22 @@ class OntologyStore:
             )
             for row in staged_rows:
                 key = (row.source_slug, row.target_slug)
-                rels[key] = _row_to_relationship(row)
+                staged = _row_to_relationship(row)
+                if key in rels:
+                    merged_props = {
+                        **rels[key].properties,
+                        **staged.properties,
+                    }
+                    rels[key] = RelationshipInstance(
+                        source_entity_type=staged.source_entity_type,
+                        source_slug=staged.source_slug,
+                        target_entity_type=staged.target_entity_type,
+                        target_slug=staged.target_slug,
+                        relationship_type=staged.relationship_type,
+                        properties=merged_props,
+                    )
+                else:
+                    rels[key] = staged
 
         return list(rels.values())
 

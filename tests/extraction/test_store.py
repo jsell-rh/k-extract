@@ -511,8 +511,27 @@ class TestVirtualView:
             "Product|REFERENCES|Product", worker_id="worker-1"
         )
         assert total == 1
-        # Staged replaces shared
+        # Staged property overrides shared
         assert results[0].properties["context"] == "staged"
+
+    def test_virtual_relationship_merges_properties(self, store: OntologyStore) -> None:
+        """Staged relationship merges properties with shared, not replaces."""
+        store.upsert_relationship(
+            _make_relationship("product:a", "product:b", context="original", weight=5)
+        )
+        store.stage_relationship(
+            "worker-1",
+            _make_relationship("product:a", "product:b", context="updated"),
+        )
+
+        results, total = store.search_relationships_by_type(
+            "Product|REFERENCES|Product", worker_id="worker-1"
+        )
+        assert total == 1
+        # Staged overrides shared property
+        assert results[0].properties["context"] == "updated"
+        # Shared-only property preserved via merge
+        assert results[0].properties["weight"] == 5
 
 
 # ------------------------------------------------------------------ #
@@ -697,6 +716,31 @@ class TestValidateAndCommit:
         store.upsert_entity(_make_product("product:a"))
         errors = store.validate_and_commit("worker-1")
         assert errors == []
+
+    def test_commit_merges_relationship_properties(self, store: OntologyStore) -> None:
+        """Validate-and-commit merges relationship properties, not replaces."""
+        store.upsert_entity(_make_product("product:a"))
+        store.upsert_entity(_make_product("product:b"))
+
+        # Shared relationship with two properties
+        store.upsert_relationship(
+            _make_relationship("product:a", "product:b", context="original", weight=5)
+        )
+
+        # Worker stages update to one property only
+        store.stage_relationship(
+            "worker-1",
+            _make_relationship("product:a", "product:b", context="updated"),
+        )
+
+        errors = store.validate_and_commit("worker-1")
+        assert errors == []
+
+        # Verify merged result in shared store
+        results, _ = store.search_relationships_by_type("Product|REFERENCES|Product")
+        assert len(results) == 1
+        assert results[0].properties["context"] == "updated"
+        assert results[0].properties["weight"] == 5
 
     def test_required_parameters_on_relationship(self, store: OntologyStore) -> None:
         store.upsert_entity(_make_product("product:a"))
