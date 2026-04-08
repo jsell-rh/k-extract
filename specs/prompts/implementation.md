@@ -16,10 +16,14 @@ These are general standards for Python software development. If they apply to yo
 
 ### Project Structure
 
-- Use `src/k_extract/` as the package root
+- Use `src/k_extract/` as the package root — ALL application code lives here
 - Use `pyproject.toml` with uv for dependency management
 - No `sys.path` hacks — use proper package installation (`uv pip install -e .`)
-- Entry point via Click/Typer CLI, registered in pyproject.toml
+- Entry point via Click/Typer CLI, registered in pyproject.toml as `k-extract = "k_extract.cli:main"`
+- Tests live in `tests/` mirroring `src/k_extract/` structure
+- `.pre-commit-config.yaml` must include ruff (lint + format) and pyright (type checking)
+- `.github/workflows/ci.yml` must run lint, type-check, and test on PRs
+- Run `uv run pre-commit run --all-files` before marking a task `ready-for-review`
 
 ### Testing
 
