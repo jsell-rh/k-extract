@@ -1,6 +1,6 @@
 # Task 004: Output Format — JSONL Mutation Writer and ID Generation
 
-**Status:** `in-progress`
+**Status:** `ready-for-review`
 **Spec Reference:** specs/process/output-format.md
 **Branch:** task-004
 **PR:** #4
@@ -52,4 +52,5 @@ Reference: specs/process/output-format.md.
 
 ## Relevant Commits
 
-(none yet)
+- `0f26200` — chore(task-004): begin implementation
+- `7567e4e` — chore(task-004): add PR number
