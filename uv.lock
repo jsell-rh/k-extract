@@ -373,7 +373,7 @@ dependencies = [
     { name = "structlog" },
 ]
 
-[package.optional-dependencies]
+[package.dev-dependencies]
 dev = [
     { name = "pre-commit" },
     { name = "pyright" },
@@ -385,16 +385,19 @@ dev = [
 requires-dist = [
     { name = "claude-agent-sdk", specifier = ">=0.1.56" },
     { name = "click", specifier = ">=8.1" },
-    { name = "pre-commit", marker = "extra == 'dev'", specifier = ">=3.0" },
     { name = "pydantic-settings", specifier = ">=2.0" },
-    { name = "pyright", marker = "extra == 'dev'", specifier = ">=1.1" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
     { name = "pyyaml", specifier = ">=6.0" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.4" },
     { name = "sqlalchemy", specifier = ">=2.0" },
     { name = "structlog", specifier = ">=24.0" },
 ]
-provides-extras = ["dev"]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "pre-commit", specifier = ">=3.0" },
+    { name = "pyright", specifier = ">=1.1" },
+    { name = "pytest", specifier = ">=8.0" },
+    { name = "ruff", specifier = ">=0.4" },
+]
 
 [[package]]
 name = "mcp"
