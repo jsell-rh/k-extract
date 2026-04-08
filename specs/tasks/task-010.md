@@ -1,10 +1,10 @@
 # Task 010: Agent Architecture — Instantiation, Message Loop, and Observability
 
-**Status:** `not-started`
+**Status:** `complete`
 **Spec Reference:** specs/agent/agent-architecture.md, specs/decisions/technology-choices.md (Logging)
-**Branch:** (none)
-**PR:** (none)
-**Review:** (none)
+**Branch:** task-010
+**PR:** #10
+**Review:** specs/reviews/task-010.md
 
 ## Description
 
@@ -75,4 +75,8 @@ Reference: specs/agent/agent-architecture.md, specs/decisions/technology-choices
 
 ## Relevant Commits
 
-(none yet)
+- `861e5c7` — feat(task-010): agent architecture — instantiation, message loop, observability
+- `08fb832` — fix(task-010): address review findings — polymorphic usage, stop hook observability, tool result logging
+- `ca26e8a` — fix(task-010): address round 2 — error details in conversation log, stop hook test assertion
+- `23448c3` — fix(task-010): address round 3 — log UserMessage/ToolResultBlock in conversation JSONL
+- Merged via PR #10
