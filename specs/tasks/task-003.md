@@ -1,6 +1,6 @@
 # Task 003: Config Schema — extraction.yaml Parsing and Validation
 
-**Status:** `ready-for-review`
+**Status:** `complete`
 **Spec Reference:** specs/process/config-schema.md
 **Branch:** task-003
 **PR:** #3
@@ -58,3 +58,4 @@ Reference: specs/process/config-schema.md.
 - `622b16d` — chore(task-003): begin implementation
 - `175eac9` — chore(task-003): add PR number
 - `0a4fd76` — feat(task-003): implement extraction.yaml config schema and YAML loader
+- Merged via PR #3
