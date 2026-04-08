@@ -1,10 +1,10 @@
 # Task 008: Prompt Generation — Template Composition and LLM Guidance
 
-**Status:** `not-started`
+**Status:** `complete`
 **Spec Reference:** specs/agent/prompt-generation.md, specs/agent/prompt-patterns.md
-**Branch:** (none)
-**PR:** (none)
-**Review:** (none)
+**Branch:** task-008
+**PR:** #8
+**Review:** specs/reviews/task-008.md
 
 ## Description
 
@@ -55,4 +55,9 @@ Reference: specs/agent/prompt-generation.md, specs/agent/prompt-patterns.md.
 
 ## Relevant Commits
 
-(none yet)
+- `32f373c` — chore(task-008): begin implementation
+- `8e11943` — chore(task-008): add PR number
+- `03c517b` — feat(task-008): prompt generation — template composition and LLM guidance
+- `8c0a488` — fix(task-008): add relationship optional_properties and use safe string substitution
+- `5020abb` — fix(task-008): include tag descriptions in guidance prompt
+- Merged via PR #8
