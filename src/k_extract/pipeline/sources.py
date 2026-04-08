@@ -51,7 +51,7 @@ class DataSourceInventory:
     total_size: int
     total_chars: int
     file_type_counts: dict[str, int]
-    directory_count: int
+    directories: list[str]
     patterns: list[str]
 
 
@@ -144,13 +144,17 @@ def discover_files(source_path: str | Path) -> list[DiscoveredFile]:
     for file_path in sorted(root.rglob("*")):
         if not file_path.is_file():
             continue
-        rel_path = str(file_path.relative_to(root))
+        rel_path = file_path.relative_to(root)
+        # Skip files in hidden directories (e.g. .git/) or hidden files
+        if any(part.startswith(".") for part in rel_path.parts):
+            continue
+        rel_str = str(rel_path)
         size = file_path.stat().st_size
         char_count = _count_chars(file_path)
-        file_type = _get_file_type(rel_path)
+        file_type = _get_file_type(rel_str)
         files.append(
             DiscoveredFile(
-                path=rel_path,
+                path=rel_str,
                 size=size,
                 char_count=char_count,
                 file_type=file_type,
@@ -201,7 +205,7 @@ def build_inventory(
         key = f.file_type if f.file_type else "(no extension)"
         file_type_counts[key] += 1
 
-    directories = {str(Path(f.path).parent) for f in files}
+    directories = sorted({str(Path(f.path).parent) for f in files})
 
     patterns = _detect_patterns(root, files)
 
@@ -212,7 +216,7 @@ def build_inventory(
         total_size=sum(f.size for f in files),
         total_chars=sum(f.char_count for f in files),
         file_type_counts=dict(sorted(file_type_counts.items())),
-        directory_count=len(directories),
+        directories=directories,
         patterns=patterns,
     )
 

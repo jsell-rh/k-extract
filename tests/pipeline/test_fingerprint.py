@@ -138,10 +138,11 @@ class TestComputeFingerprint:
         fp2 = compute_fingerprint("config", "prompts", "model-1", [("a.py", "hash2")])
         assert fp1 != fp2
 
-    def test_different_file_paths(self) -> None:
+    def test_same_hashes_different_paths_same_fingerprint(self) -> None:
+        """File paths are NOT part of the fingerprint — only content hashes."""
         fp1 = compute_fingerprint("config", "prompts", "model-1", [("a.py", "hash")])
         fp2 = compute_fingerprint("config", "prompts", "model-1", [("b.py", "hash")])
-        assert fp1 != fp2
+        assert fp1 == fp2
 
     def test_returns_hex_digest(self) -> None:
         fp = compute_fingerprint("c", "p", "m", [])
@@ -258,3 +259,14 @@ class TestStoreFingerprint:
 
         count = db_session.query(EnvironmentFingerprint).count()
         assert count == 2
+
+    def test_duplicate_fingerprint_updates_existing(self, db_session: Session) -> None:
+        """Storing the same fingerprint twice should not raise IntegrityError."""
+        store_fingerprint(db_session, "fp-dup", "ch1", "m1")
+        record = store_fingerprint(db_session, "fp-dup", "ch2", "m2")
+
+        assert record.config_hash == "ch2"
+        assert record.model_id == "m2"
+
+        count = db_session.query(EnvironmentFingerprint).count()
+        assert count == 1

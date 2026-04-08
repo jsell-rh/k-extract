@@ -89,8 +89,7 @@ def compute_fingerprint(
     h.update(config_contents.encode("utf-8"))
     h.update(prompt_templates.encode("utf-8"))
     h.update(model_id.encode("utf-8"))
-    for filepath, file_hash in file_hashes:
-        h.update(filepath.encode("utf-8"))
+    for _filepath, file_hash in file_hashes:
         h.update(file_hash.encode("utf-8"))
     return h.hexdigest()
 
@@ -183,6 +182,14 @@ def store_fingerprint(
     Returns:
         The created EnvironmentFingerprint record.
     """
+    existing = session.get(EnvironmentFingerprint, fingerprint)
+    if existing is not None:
+        existing.created_at = datetime.now(UTC)
+        existing.config_hash = config_hash
+        existing.model_id = model_id
+        session.commit()
+        return existing
+
     record = EnvironmentFingerprint(
         fingerprint=fingerprint,
         created_at=datetime.now(UTC),

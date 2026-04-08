@@ -114,6 +114,31 @@ class TestDiscoverFiles:
         files = discover_files(tmp_path)
         assert files[0].file_type == "md"
 
+    def test_excludes_git_directory(self, tmp_path: Path) -> None:
+        """Files under .git/ should be excluded (VCS metadata)."""
+        git_dir = tmp_path / ".git" / "objects"
+        git_dir.mkdir(parents=True)
+        (git_dir / "abc123").write_bytes(b"\x00\x01\x02")
+        (tmp_path / ".git" / "HEAD").write_text("ref: refs/heads/main\n")
+        (tmp_path / "README.md").write_text("# Hello")
+
+        files = discover_files(tmp_path)
+        paths = {f.path for f in files}
+        assert "README.md" in paths
+        assert not any(".git" in p for p in paths)
+
+    def test_excludes_hidden_files_and_dirs(self, tmp_path: Path) -> None:
+        """All hidden files/directories (dotfiles/dotdirs) should be excluded."""
+        (tmp_path / ".env").write_text("SECRET=123")
+        hidden = tmp_path / ".hidden"
+        hidden.mkdir()
+        (hidden / "secret.txt").write_text("secret")
+        (tmp_path / "visible.txt").write_text("public")
+
+        files = discover_files(tmp_path)
+        paths = {f.path for f in files}
+        assert paths == {"visible.txt"}
+
 
 class TestGroupByDirectory:
     def test_groups_by_parent(self) -> None:
@@ -185,7 +210,7 @@ class TestBuildInventory:
         assert inv.file_count == len(files)
         assert inv.total_size == sum(f.size for f in files)
         assert inv.total_chars == sum(f.char_count for f in files)
-        assert inv.directory_count > 0
+        assert len(inv.directories) > 0
         assert isinstance(inv.file_type_counts, dict)
 
     def test_file_type_counts(self, source_tree: Path) -> None:
@@ -224,7 +249,7 @@ class TestBuildInventory:
         assert inv.file_count == 0
         assert inv.total_size == 0
         assert inv.total_chars == 0
-        assert inv.directory_count == 0
+        assert inv.directories == []
         assert inv.file_type_counts == {}
 
     def test_no_extension_counted(self, tmp_path: Path) -> None:
@@ -232,6 +257,16 @@ class TestBuildInventory:
         files = discover_files(tmp_path)
         inv = build_inventory("test", tmp_path, files)
         assert "(no extension)" in inv.file_type_counts
+
+    def test_directories_list(self, source_tree: Path) -> None:
+        """Inventory should include actual directory paths, not just a count."""
+        files = discover_files(source_tree)
+        inv = build_inventory("test", source_tree, files)
+        assert isinstance(inv.directories, list)
+        assert "." in inv.directories  # root-level files
+        assert "docs" in inv.directories
+        assert "src/myapp" in inv.directories
+        assert inv.directories == sorted(inv.directories)
 
 
 class TestDiscoverAndInventory:
