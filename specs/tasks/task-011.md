@@ -68,4 +68,4 @@ Reference: specs/process/guided-session.md.
 
 ## Relevant Commits
 
-- `pending` — feat(task-011): implement k-extract init guided session
+- `8b09094` — feat(task-011): implement k-extract init guided session
