@@ -1,10 +1,10 @@
 # Task 002: Domain Model — Ontology Type Definitions and Instances
 
-**Status:** `ready-for-review`
+**Status:** `needs-revision`
 **Spec Reference:** specs/domain/domain-model.md
 **Branch:** task-002
 **PR:** #2
-**Review:** (none)
+**Review:** specs/reviews/task-002.md
 
 ## Description
 
