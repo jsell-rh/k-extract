@@ -76,3 +76,4 @@ Reference: specs/agent/agent-architecture.md, specs/decisions/technology-choices
 ## Relevant Commits
 
 - `861e5c7` — feat(task-010): agent architecture — instantiation, message loop, observability
+- `08fb832` — fix(task-010): address review findings — polymorphic usage, stop hook observability, tool result logging
