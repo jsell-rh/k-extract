@@ -1,6 +1,6 @@
 # Task 002: Domain Model — Ontology Type Definitions and Instances
 
-**Status:** `in-progress`
+**Status:** `ready-for-review`
 **Spec Reference:** specs/domain/domain-model.md
 **Branch:** task-002
 **PR:** #2
@@ -61,4 +61,5 @@ Reference: specs/domain/domain-model.md sections 1–5.
 
 ## Relevant Commits
 
-(none yet)
+- `5a9aa1f` — chore(task-002): begin implementation
+- `dab8077` — chore(task-002): add PR number
