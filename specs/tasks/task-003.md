@@ -3,7 +3,7 @@
 **Status:** `in-progress`
 **Spec Reference:** specs/process/config-schema.md
 **Branch:** task-003
-**PR:** (none)
+**PR:** #3
 **Review:** (none)
 
 ## Description
