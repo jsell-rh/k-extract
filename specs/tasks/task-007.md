@@ -73,4 +73,4 @@ Reference: specs/agent/agent-tools.md.
 
 ## Relevant Commits
 
-- `pending` — feat(task-007): implement all five agent extraction tools
+- `15e410e` — feat(task-007): implement all five agent extraction tools
