@@ -1,8 +1,8 @@
 # Task 010: Agent Architecture — Instantiation, Message Loop, and Observability
 
-**Status:** `not-started`
+**Status:** `in-progress`
 **Spec Reference:** specs/agent/agent-architecture.md, specs/decisions/technology-choices.md (Logging)
-**Branch:** (none)
+**Branch:** task-010
 **PR:** (none)
 **Review:** (none)
 
