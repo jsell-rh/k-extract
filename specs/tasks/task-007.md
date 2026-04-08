@@ -74,3 +74,4 @@ Reference: specs/agent/agent-tools.md.
 ## Relevant Commits
 
 - `15e410e` — feat(task-007): implement all five agent extraction tools
+- `2d92abe` — fix(task-007): address review round 1 findings
