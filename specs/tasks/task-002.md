@@ -3,7 +3,7 @@
 **Status:** `in-progress`
 **Spec Reference:** specs/domain/domain-model.md
 **Branch:** task-002
-**PR:** (none)
+**PR:** #2
 **Review:** (none)
 
 ## Description
