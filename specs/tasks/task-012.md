@@ -1,6 +1,6 @@
 # Task 012: Extraction Pipeline — `k-extract run` Orchestrator and Workers
 
-**Status:** `needs-revision`
+**Status:** `ready-for-review`
 **Spec Reference:** specs/process/extraction-pipeline.md, specs/concurrency/concurrency-model.md
 **Branch:** task-012
 **PR:** #12
@@ -80,3 +80,4 @@ Reference: specs/process/extraction-pipeline.md, specs/concurrency/concurrency-m
 - `e48d3b5` — feat(task-012): implement k-extract run orchestrator and workers
 - `b857cd8` — fix(task-012): address all review findings from round 1
 - `de94f37` — fix(task-012): address all review findings from round 2
+- `pending` — fix(task-012): address all review findings from round 3

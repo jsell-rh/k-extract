@@ -41,6 +41,7 @@ from k_extract.pipeline.fingerprint import (
     store_fingerprint,
 )
 from k_extract.pipeline.jobs import (
+    CHARS_PER_TOKEN,
     FileInfo,
     compute_available_tokens,
     create_jobs,
@@ -53,7 +54,6 @@ from k_extract.pipeline.writer import JsonlWriter
 
 # Default context window budget parameters
 CONTEXT_WINDOW = 200_000
-PROMPT_OVERHEAD = 10_000
 OUTPUT_RESERVATION = 50_000
 SAFETY_MARGIN = 5_000
 DEFAULT_WORKERS = 3
@@ -207,11 +207,20 @@ async def run_pipeline(
 
     is_fresh = decision.action == ResumeAction.FRESH_START
 
-    # 7. Handle fresh start vs resume
+    # 7. Create ontology store (before fresh-start handling so tables exist)
+    ontology_engine = create_engine_with_wal(effective_db_path)
+    store = OntologyStore(ontology_engine, ontology)
+
+    # 8. Handle fresh start vs resume
     with session_factory() as session:
         if is_fresh:
             # Delete all existing jobs
             session.execute(sa_text("DELETE FROM jobs"))
+            # Clear ontology store tables (shared same database)
+            session.execute(sa_text("DELETE FROM entity_instances"))
+            session.execute(sa_text("DELETE FROM relationship_instances"))
+            session.execute(sa_text("DELETE FROM staged_entities"))
+            session.execute(sa_text("DELETE FROM staged_relationships"))
             session.commit()
             # Store new fingerprint
             store_fingerprint(
@@ -226,10 +235,6 @@ async def run_pipeline(
             failed_count = reset_failed_jobs(session)
             if failed_count > 0:
                 log.info("pipeline.failed_jobs_reset", count=failed_count)
-
-    # 8. Create ontology store
-    ontology_engine = create_engine_with_wal(effective_db_path)
-    store = OntologyStore(ontology_engine, ontology)
 
     # 9. Emit DEFINE operations (only on fresh start)
     if is_fresh and output_path.exists():
@@ -254,8 +259,13 @@ async def run_pipeline(
     total_failed = 0
     total_jobs = 0
 
+    # Estimate prompt overhead from actual prompt content (no magic numbers)
+    prompt_overhead = (
+        len(config.prompts.system_prompt) + len(config.prompts.job_description_template)
+    ) // CHARS_PER_TOKEN
+
     available_tokens = compute_available_tokens(
-        CONTEXT_WINDOW, PROMPT_OVERHEAD, OUTPUT_RESERVATION, SAFETY_MARGIN
+        CONTEXT_WINDOW, prompt_overhead, OUTPUT_RESERVATION, SAFETY_MARGIN
     )
 
     for ds in config.data_sources:

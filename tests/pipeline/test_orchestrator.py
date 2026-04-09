@@ -568,6 +568,95 @@ class TestRunPipeline:
             assert max(define_indices) < min(create_indices)
 
     @pytest.mark.asyncio
+    async def test_force_clears_ontology_tables(self, tmp_path: Path) -> None:
+        """--force clears ontology store tables (entities, relationships)."""
+        config_path, source_dir = _make_config(tmp_path)
+        db_path = str(tmp_path / "test.db")
+
+        mock_agent_result = AgentResult(
+            success=True,
+            error_message=None,
+            usage=UsageStats(),
+        )
+
+        # First run — populates ontology tables
+        with (
+            patch(
+                "k_extract.pipeline.worker.run_agent",
+                new_callable=AsyncMock,
+                return_value=mock_agent_result,
+            ),
+            patch(
+                "k_extract.pipeline.worker.create_tool_server",
+                return_value=None,
+            ),
+        ):
+            await run_pipeline(
+                config_path=config_path,
+                workers=1,
+                db_path=db_path,
+            )
+
+        # Manually insert rows into ontology tables to verify clearing
+        from sqlalchemy import text as sa_text
+
+        from k_extract.pipeline.database import create_engine_with_wal
+
+        engine = create_engine_with_wal(db_path)
+        with engine.connect() as conn:
+            conn.execute(
+                sa_text(
+                    "INSERT OR REPLACE INTO entity_instances "
+                    "(slug, entity_type, properties) VALUES "
+                    "('document:stale', 'Document', '{}')"
+                )
+            )
+            conn.execute(
+                sa_text(
+                    "INSERT OR REPLACE INTO staged_entities "
+                    "(worker_id, slug, entity_type, properties) VALUES "
+                    "('01', 'document:staged', 'Document', '{}')"
+                )
+            )
+            conn.commit()
+
+            # Verify rows exist before force
+            entity_count = conn.execute(
+                sa_text("SELECT COUNT(*) FROM entity_instances")
+            ).scalar()
+            assert entity_count is not None and entity_count >= 1
+
+        # Second run with --force — should clear ontology tables
+        with (
+            patch(
+                "k_extract.pipeline.worker.run_agent",
+                new_callable=AsyncMock,
+                return_value=mock_agent_result,
+            ),
+            patch(
+                "k_extract.pipeline.worker.create_tool_server",
+                return_value=None,
+            ),
+        ):
+            await run_pipeline(
+                config_path=config_path,
+                workers=1,
+                force=True,
+                db_path=db_path,
+            )
+
+        # Verify ontology tables are empty after force
+        with engine.connect() as conn:
+            entity_count = conn.execute(
+                sa_text("SELECT COUNT(*) FROM entity_instances")
+            ).scalar()
+            staged_count = conn.execute(
+                sa_text("SELECT COUNT(*) FROM staged_entities")
+            ).scalar()
+            assert entity_count == 0, "entity_instances should be cleared on --force"
+            assert staged_count == 0, "staged_entities should be cleared on --force"
+
+    @pytest.mark.asyncio
     async def test_rerun_retries_failed_jobs(self, tmp_path: Path) -> None:
         """Re-running retries previously failed jobs."""
         config_path, source_dir = _make_config(tmp_path)
