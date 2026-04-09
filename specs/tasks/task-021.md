@@ -1,6 +1,6 @@
 # Task 021: Respect .gitignore in File Discovery
 
-**Status:** `ready-for-review`
+**Status:** `complete`
 **Spec Reference:** specs/process/guided-session.md, specs/process/extraction-pipeline.md
 **Branch:** task-021
 **PR:** #21
@@ -36,3 +36,4 @@ If no `.gitignore` is present in a data source, behavior is unchanged (all non-h
 - `b487ba6` — chore(task-021): begin implementation
 - `4fe1028` — chore(task-021): add PR number
 - `f4f76ba` — feat(task-021): respect .gitignore in file discovery
+- Merged via PR #21
