@@ -3,7 +3,7 @@
 **Status:** `in-progress`
 **Spec Reference:** specs/process/extraction-pipeline.md (Job Inspection, User-Facing Error Reporting)
 **Branch:** task-013
-**PR:** (none)
+**PR:** #13
 **Review:** (none)
 
 ## Description
