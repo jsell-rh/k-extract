@@ -1,6 +1,6 @@
 # Task 019: Rich Terminal UI — Streaming Feedback for `k-extract init`
 
-**Status:** `in-progress`
+**Status:** `ready-for-review`
 **Spec Reference:** specs/process/guided-session.md
 **Branch:** task-019
 **PR:** #19
@@ -70,4 +70,4 @@ The `k-extract init` command currently prints a static status line (e.g., "Gener
 
 ## Relevant Commits
 
-(none yet)
+- `pending` — feat(task-019): Rich terminal UI with streaming feedback for k-extract init

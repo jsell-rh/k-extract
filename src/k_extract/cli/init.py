@@ -18,7 +18,16 @@ from pathlib import Path
 
 import click
 import yaml
+from rich.console import Console
+from rich.panel import Panel
+from rich.table import Table
 
+from k_extract.cli.display import (
+    clear_thinking,
+    get_console,
+    spinner,
+    stream_thinking,
+)
 from k_extract.config.loader import save_config
 from k_extract.config.schema import (
     DataSourceConfig,
@@ -92,6 +101,8 @@ async def run_guided_session(
     Returns:
         The validated ExtractionConfig written to output_path.
     """
+    console = get_console()
+
     if llm_call is None:
         llm_call = _create_default_llm_caller()
 
@@ -106,23 +117,24 @@ async def run_guided_session(
             )
             if problem_statement.strip():
                 break
-            click.echo("Please provide a problem statement.")
+            console.print("Please provide a problem statement.")
 
-    click.echo(f"\nProblem statement: {problem_statement}\n")
+    console.print(f"\nProblem statement: {problem_statement}\n")
 
     # Step 2: Data inventory
     data_sources_config, all_files, inventories = _scan_data_sources(data_source_paths)
-    _display_inventory(inventories)
+    _display_inventory(inventories, console)
 
     # Step 3: AI ontology proposal
     sample_content = _read_sample_files(all_files)
-    click.echo("Generating ontology proposal...")
-    ontology = await _propose_ontology(
-        problem_statement=problem_statement,
-        inventories=inventories,
-        sample_content=sample_content,
-        llm_call=llm_call,
-    )
+    with spinner("Generating ontology proposal", console):
+        ontology = await _propose_ontology(
+            problem_statement=problem_statement,
+            inventories=inventories,
+            sample_content=sample_content,
+            llm_call=llm_call,
+            console=console,
+        )
 
     # Step 3b: Iterative refinement loop (skip in headless mode)
     if not headless:
@@ -131,19 +143,20 @@ async def run_guided_session(
             problem_statement=problem_statement,
             llm_call=llm_call,
             input_func=_input,
+            console=console,
         )
 
     # Step 4: Config file output
-    click.echo("Composing prompts...")
-    config = await _build_config(
-        problem_statement=problem_statement,
-        data_sources=data_sources_config,
-        ontology=ontology,
-        llm_call=llm_call,
-    )
+    with spinner("Composing extraction prompts", console):
+        config = await _build_config(
+            problem_statement=problem_statement,
+            data_sources=data_sources_config,
+            ontology=ontology,
+            llm_call=llm_call,
+        )
 
     save_config(config, output_path)
-    click.echo(f"\nConfig written to {output_path}")
+    console.print(f"\n[green]✓[/green] Config written to {output_path}")
 
     return config
 
@@ -193,37 +206,37 @@ def _make_unique_name(name: str, existing: set[str]) -> str:
     return f"{name}-{counter}"
 
 
-def _display_inventory(inventories: list[DataSourceInventory]) -> None:
-    """Display data inventory to the user."""
-    click.echo("=" * 60)
-    click.echo("Data Inventory")
-    click.echo("=" * 60)
-
+def _display_inventory(
+    inventories: list[DataSourceInventory], console: Console
+) -> None:
+    """Display data inventory using Rich formatting."""
     for inv in inventories:
-        click.echo(f"\n  Source: {inv.name}")
-        click.echo(f"  Path: {inv.path}")
-        click.echo(f"  Files: {inv.file_count}")
-        click.echo(f"  Total size: {_format_size(inv.total_size)}")
-        click.echo(f"  Total characters: {inv.total_chars:,}")
+        table = Table(show_header=False, box=None, padding=(0, 2))
+        table.add_column("Key", style="bold")
+        table.add_column("Value")
+
+        table.add_row("Path", inv.path)
+        table.add_row("Files", str(inv.file_count))
+        table.add_row("Total size", _format_size(inv.total_size))
+        table.add_row("Total characters", f"{inv.total_chars:,}")
 
         if inv.file_type_counts:
-            click.echo("  File types:")
-            for ft, count in inv.file_type_counts.items():
-                click.echo(f"    .{ft}: {count}")
+            type_strs = ", ".join(
+                f".{ft} ({count})" for ft, count in inv.file_type_counts.items()
+            )
+            table.add_row("File types", type_strs)
 
         if inv.directories:
-            click.echo(f"  Directories: {len(inv.directories)}")
-            for d in inv.directories[:10]:
-                click.echo(f"    {d}")
+            dir_list = ", ".join(inv.directories[:10])
             if len(inv.directories) > 10:
-                click.echo(f"    ... and {len(inv.directories) - 10} more")
+                dir_list += f", ... and {len(inv.directories) - 10} more"
+            table.add_row("Directories", f"{len(inv.directories)} — {dir_list}")
 
         if inv.patterns:
-            click.echo("  Patterns detected:")
-            for p in inv.patterns:
-                click.echo(f"    - {p}")
+            table.add_row("Patterns", ", ".join(inv.patterns))
 
-    click.echo()
+        panel = Panel(table, title=f"[bold]{inv.name}[/bold]", title_align="left")
+        console.print(panel)
 
 
 def _format_size(size_bytes: int) -> str:
@@ -309,6 +322,7 @@ async def _propose_ontology(
     inventories: list[DataSourceInventory],
     sample_content: str,
     llm_call: Callable[[str], Awaitable[str]],
+    console: Console,
 ) -> OntologyConfig:
     """Generate an ontology proposal using AI.
 
@@ -317,6 +331,7 @@ async def _propose_ontology(
         inventories: Data source inventory reports.
         sample_content: Representative sample of file contents.
         llm_call: Async callable for LLM interaction.
+        console: Rich Console instance for display.
 
     Returns:
         Proposed OntologyConfig.
@@ -362,48 +377,57 @@ async def _propose_ontology(
 
     response = await llm_call(prompt)
     ontology, reasoning = _parse_ontology_response(response)
-    _display_ontology(ontology)
+    _display_ontology(ontology, console)
     if reasoning:
-        _display_reasoning(reasoning)
+        _display_reasoning(reasoning, console)
     return ontology
 
 
-def _display_reasoning(reasoning: str) -> None:
+def _display_reasoning(reasoning: str, console: Console) -> None:
     """Display the AI's reasoning for the ontology proposal."""
-    click.echo("Reasoning:")
-    click.echo(reasoning)
-    click.echo()
+    panel = Panel(reasoning.strip(), title="[bold]Reasoning[/bold]", title_align="left")
+    console.print(panel)
 
 
-def _display_ontology(ontology: OntologyConfig) -> None:
-    """Display the current ontology to the user."""
-    click.echo("\n" + "=" * 60)
-    click.echo("Current Ontology")
-    click.echo("=" * 60)
+def _display_ontology(ontology: OntologyConfig, console: Console) -> None:
+    """Display the current ontology using Rich formatting."""
+    # Entity types table
+    if ontology.entity_types:
+        et_table = Table(title="Entity Types", show_lines=True)
+        et_table.add_column("Label", style="bold cyan")
+        et_table.add_column("Description")
+        et_table.add_column("Required Properties")
+        et_table.add_column("Optional Properties")
+        et_table.add_column("Tags")
 
-    click.echo("\nEntity Types:")
-    for et in ontology.entity_types:
-        click.echo(f"\n  {et.label}: {et.description}")
-        if et.required_properties:
-            click.echo(f"    Required: {', '.join(et.required_properties)}")
-        if et.optional_properties:
-            click.echo(f"    Optional: {', '.join(et.optional_properties)}")
-        if et.tag_definitions:
-            tags = ", ".join(
-                f"{k} ({v})" for k, v in sorted(et.tag_definitions.items())
+        for et in ontology.entity_types:
+            req = ", ".join(et.required_properties) if et.required_properties else "—"
+            opt = ", ".join(et.optional_properties) if et.optional_properties else "—"
+            tags = (
+                ", ".join(f"{k} ({v})" for k, v in sorted(et.tag_definitions.items()))
+                if et.tag_definitions
+                else "—"
             )
-            click.echo(f"    Tags: {tags}")
+            et_table.add_row(et.label, et.description, req, opt, tags)
 
-    click.echo("\nRelationship Types:")
-    for rt in ontology.relationship_types:
-        click.echo(f"\n  {rt.label}: {rt.description}")
-        click.echo(f"    {rt.source_entity_type} -> {rt.target_entity_type}")
-        if rt.required_properties:
-            click.echo(f"    Required: {', '.join(rt.required_properties)}")
-        if rt.optional_properties:
-            click.echo(f"    Optional: {', '.join(rt.optional_properties)}")
+        console.print(et_table)
 
-    click.echo()
+    # Relationship types table
+    if ontology.relationship_types:
+        rt_table = Table(title="Relationship Types", show_lines=True)
+        rt_table.add_column("Label", style="bold magenta")
+        rt_table.add_column("Description")
+        rt_table.add_column("Source → Target")
+        rt_table.add_column("Required Properties")
+        rt_table.add_column("Optional Properties")
+
+        for rt in ontology.relationship_types:
+            direction = f"{rt.source_entity_type} → {rt.target_entity_type}"
+            req = ", ".join(rt.required_properties) if rt.required_properties else "—"
+            opt = ", ".join(rt.optional_properties) if rt.optional_properties else "—"
+            rt_table.add_row(rt.label, rt.description, direction, req, opt)
+
+        console.print(rt_table)
 
 
 async def _refinement_loop(
@@ -412,6 +436,7 @@ async def _refinement_loop(
     problem_statement: str,
     llm_call: Callable[[str], Awaitable[str]],
     input_func: Callable[[str], str],
+    console: Console,
 ) -> OntologyConfig:
     """Iterative refinement loop for the ontology.
 
@@ -423,22 +448,23 @@ async def _refinement_loop(
         problem_statement: The user's problem statement.
         llm_call: Async callable for LLM interaction.
         input_func: Callable for user input.
+        console: Rich Console instance for display.
 
     Returns:
         The accepted OntologyConfig.
     """
     while True:
-        _display_ontology(ontology)
+        _display_ontology(ontology, console)
         feedback = input_func("Provide feedback to refine, or press Enter to accept")
         if not feedback.strip():
             break
-        click.echo("Updating ontology...")
-        ontology = await _refine_ontology(
-            ontology=ontology,
-            feedback=feedback,
-            problem_statement=problem_statement,
-            llm_call=llm_call,
-        )
+        with spinner("Updating ontology", console):
+            ontology = await _refine_ontology(
+                ontology=ontology,
+                feedback=feedback,
+                problem_statement=problem_statement,
+                llm_call=llm_call,
+            )
 
     return ontology
 
@@ -604,7 +630,10 @@ async def _build_config(
 
 
 def _create_default_llm_caller() -> Callable[[str], Awaitable[str]]:
-    """Create a default LLM caller using the Claude Agent SDK.
+    """Create a streaming LLM caller that displays thinking as dim status lines.
+
+    The caller streams incremental text to the display layer as TextBlock
+    chunks arrive. The full accumulated response is returned as a string.
 
     Returns:
         Async callable that sends a prompt to Claude and returns the text response.
@@ -617,6 +646,8 @@ def _create_default_llm_caller() -> Callable[[str], Awaitable[str]]:
         TextBlock,
         UserMessage,
     )
+
+    console = get_console()
 
     async def call(prompt: str) -> str:
         options = ClaudeAgentOptions(
@@ -632,10 +663,12 @@ def _create_default_llm_caller() -> Callable[[str], Awaitable[str]]:
                     for block in message.content:
                         if isinstance(block, TextBlock):
                             text_parts.append(block.text)
+                            stream_thinking(console, block.text)
                 elif isinstance(message, UserMessage):
                     pass  # No tools configured, no user messages expected
                 elif isinstance(message, ResultMessage):
                     break
+        clear_thinking(console)
         return "".join(text_parts)
 
     return call
