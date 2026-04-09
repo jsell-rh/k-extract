@@ -139,6 +139,98 @@ class TestDiscoverFiles:
         paths = {f.path for f in files}
         assert paths == {"visible.txt"}
 
+    def test_gitignore_excludes_matching_files(self, tmp_path: Path) -> None:
+        """Files matching .gitignore patterns are excluded."""
+        (tmp_path / ".gitignore").write_text("*.log\nbuild/\n")
+        (tmp_path / "app.py").write_text("print('hi')")
+        (tmp_path / "debug.log").write_text("log data")
+        build = tmp_path / "build"
+        build.mkdir()
+        (build / "output.bin").write_bytes(b"\x00\x01")
+
+        files = discover_files(tmp_path)
+        paths = {f.path for f in files}
+        assert paths == {"app.py"}
+
+    def test_no_gitignore_returns_all_files(self, tmp_path: Path) -> None:
+        """When no .gitignore is present, all non-hidden files are returned."""
+        (tmp_path / "a.txt").write_text("a")
+        (tmp_path / "b.log").write_text("b")
+        sub = tmp_path / "sub"
+        sub.mkdir()
+        (sub / "c.dat").write_text("c")
+
+        files = discover_files(tmp_path)
+        paths = {f.path for f in files}
+        assert paths == {"a.txt", "b.log", "sub/c.dat"}
+
+    def test_gitignore_negation_pattern(self, tmp_path: Path) -> None:
+        """Negation patterns (!) re-include previously excluded files."""
+        (tmp_path / ".gitignore").write_text("*.log\n!important.log\n")
+        (tmp_path / "debug.log").write_text("debug")
+        (tmp_path / "important.log").write_text("keep me")
+        (tmp_path / "app.py").write_text("code")
+
+        files = discover_files(tmp_path)
+        paths = {f.path for f in files}
+        assert "debug.log" not in paths
+        assert "important.log" in paths
+        assert "app.py" in paths
+
+    def test_gitignore_nested_directory_pattern(self, tmp_path: Path) -> None:
+        """Directory patterns exclude files in nested directories."""
+        (tmp_path / ".gitignore").write_text("__pycache__/\n*.pyc\n")
+        pkg = tmp_path / "src" / "pkg"
+        pkg.mkdir(parents=True)
+        (pkg / "main.py").write_text("code")
+        cache = pkg / "__pycache__"
+        cache.mkdir()
+        (cache / "main.cpython-312.pyc").write_bytes(b"\x00")
+        (tmp_path / "src" / "pkg" / "util.pyc").write_bytes(b"\x00")
+
+        files = discover_files(tmp_path)
+        paths = {f.path for f in files}
+        assert "src/pkg/main.py" in paths
+        assert not any("__pycache__" in p for p in paths)
+        assert not any(p.endswith(".pyc") for p in paths)
+
+    def test_gitignore_comment_lines_ignored(self, tmp_path: Path) -> None:
+        """Comment lines (starting with #) in .gitignore are ignored."""
+        (tmp_path / ".gitignore").write_text("# This is a comment\n*.tmp\n")
+        (tmp_path / "data.tmp").write_text("temp")
+        (tmp_path / "keep.txt").write_text("keep")
+
+        files = discover_files(tmp_path)
+        paths = {f.path for f in files}
+        assert paths == {"keep.txt"}
+
+    def test_gitignore_empty_has_no_effect(self, tmp_path: Path) -> None:
+        """An empty .gitignore excludes nothing."""
+        (tmp_path / ".gitignore").write_text("")
+        (tmp_path / "a.txt").write_text("a")
+        (tmp_path / "b.log").write_text("b")
+
+        files = discover_files(tmp_path)
+        paths = {f.path for f in files}
+        assert paths == {"a.txt", "b.log"}
+
+    def test_gitignore_glob_patterns(self, tmp_path: Path) -> None:
+        """Glob patterns like *.o and docs/**/*.pdf work correctly."""
+        (tmp_path / ".gitignore").write_text("*.o\ndocs/**/*.pdf\n")
+        (tmp_path / "main.c").write_text("int main(){}")
+        (tmp_path / "main.o").write_bytes(b"\x00")
+        docs = tmp_path / "docs" / "guides"
+        docs.mkdir(parents=True)
+        (docs / "manual.pdf").write_bytes(b"%PDF")
+        (docs / "readme.txt").write_text("read me")
+
+        files = discover_files(tmp_path)
+        paths = {f.path for f in files}
+        assert "main.c" in paths
+        assert "main.o" not in paths
+        assert "docs/guides/manual.pdf" not in paths
+        assert "docs/guides/readme.txt" in paths
+
 
 class TestGroupByDirectory:
     def test_groups_by_parent(self) -> None:
