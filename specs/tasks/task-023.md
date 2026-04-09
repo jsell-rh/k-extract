@@ -75,3 +75,4 @@ Workers receive a `data_source` parameter and only claim jobs from that source. 
 
 - `d6d4ee4` — chore(task-023): begin implementation
 - `1fe446b` — chore(task-023): add PR number
+- `64412ab` — feat(task-023): upfront job generation and global worker queue
