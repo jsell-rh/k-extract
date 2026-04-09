@@ -3,7 +3,7 @@
 **Status:** `in-progress`
 **Spec Reference:** specs/process/job-lifecycle.md (Section: Batching Strategy)
 **Branch:** task-016
-**PR:** (none)
+**PR:** #16
 **Review:** (none)
 
 ## Description
