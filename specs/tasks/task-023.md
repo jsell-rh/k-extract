@@ -1,9 +1,9 @@
 # Task 023: Upfront Job Generation and Global Worker Queue
 
-**Status:** `not-started`
+**Status:** `complete`
 **Spec Reference:** specs/process/extraction-pipeline.md
-**Branch:** (none)
-**PR:** (none)
+**Branch:** task-023
+**PR:** #23
 **Review:** (none)
 
 ## Description
@@ -73,4 +73,7 @@ Workers receive a `data_source` parameter and only claim jobs from that source. 
 
 ## Relevant Commits
 
-(none yet)
+- `d6d4ee4` — chore(task-023): begin implementation
+- `1fe446b` — chore(task-023): add PR number
+- `64412ab` — feat(task-023): upfront job generation and global worker queue
+- Merged via PR #23

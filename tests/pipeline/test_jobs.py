@@ -57,13 +57,14 @@ def _insert_job(
     attempt: int = 0,
     completed_at: datetime | None = None,
     error_message: str | None = None,
+    data_source: str = "source",
 ) -> Job:
     """Helper to insert a job for testing."""
     now = datetime.now(UTC)
     job = Job(
         job_id=job_id,
         order=order,
-        data_source="source",
+        data_source=data_source,
         files=["file.md"],
         file_count=1,
         total_characters=100,
@@ -304,6 +305,30 @@ class TestClaimNextJob:
         assert len(claimed_ids) == len(set(claimed_ids))
         # All 10 jobs should be claimed
         assert len(claimed_ids) == 10
+
+    def test_global_claim_across_data_sources(self, session: Session) -> None:
+        """claim_next_job claims from all data sources by global order."""
+        _insert_job(session, "source-a-job", order=0, data_source="source-a")
+        _insert_job(session, "source-b-job", order=1, data_source="source-b")
+        _insert_job(session, "source-c-job", order=2, data_source="source-c")
+
+        first = claim_next_job(session, "worker-1")
+        assert first is not None
+        assert first.job_id == "source-a-job"
+        assert first.data_source == "source-a"
+
+        second = claim_next_job(session, "worker-1")
+        assert second is not None
+        assert second.job_id == "source-b-job"
+        assert second.data_source == "source-b"
+
+        third = claim_next_job(session, "worker-1")
+        assert third is not None
+        assert third.job_id == "source-c-job"
+        assert third.data_source == "source-c"
+
+        # No more jobs
+        assert claim_next_job(session, "worker-1") is None
 
 
 class TestMarkCompleted:

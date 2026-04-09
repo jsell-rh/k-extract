@@ -207,8 +207,7 @@ class TestWorkerLoop:
                 session_factory=session_factory,
                 config=config,
                 writer=writer,
-                data_source="test-source",
-                source_path=tmp_path / "source",
+                source_paths={"test-source": tmp_path / "source"},
             )
 
         assert result.jobs_processed == 1
@@ -259,8 +258,7 @@ class TestWorkerLoop:
                 session_factory=session_factory,
                 config=config,
                 writer=writer,
-                data_source="test-source",
-                source_path=tmp_path / "source",
+                source_paths={"test-source": tmp_path / "source"},
             )
 
         assert result.jobs_processed == 1
@@ -308,8 +306,7 @@ class TestWorkerLoop:
                 session_factory=session_factory,
                 config=config,
                 writer=writer,
-                data_source="test-source",
-                source_path=tmp_path / "source",
+                source_paths={"test-source": tmp_path / "source"},
             )
 
         assert result.jobs_processed == 0
@@ -354,8 +351,7 @@ class TestWorkerLoop:
                 session_factory=session_factory,
                 config=config,
                 writer=writer,
-                data_source="test-source",
-                source_path=tmp_path / "source",
+                source_paths={"test-source": tmp_path / "source"},
                 max_jobs=2,
             )
 
@@ -400,8 +396,7 @@ class TestWorkerLoop:
                 session_factory=session_factory,
                 config=config,
                 writer=writer,
-                data_source="test-source",
-                source_path=tmp_path / "source",
+                source_paths={"test-source": tmp_path / "source"},
             )
 
         assert result.jobs_processed == 2
@@ -456,8 +451,7 @@ class TestWorkerLoop:
                 session_factory=session_factory,
                 config=config,
                 writer=writer,
-                data_source="test-source",
-                source_path=tmp_path / "source",
+                source_paths={"test-source": tmp_path / "source"},
             )
 
         assert result.jobs_processed == 3
@@ -465,7 +459,7 @@ class TestWorkerLoop:
         assert result.jobs_failed == 1
 
     @pytest.mark.asyncio
-    async def test_only_claims_matching_data_source(
+    async def test_claims_globally_across_data_sources(
         self,
         tmp_path: Path,
         session_factory,
@@ -474,17 +468,22 @@ class TestWorkerLoop:
         config: ExtractionConfig,
         writer: JsonlWriter,
     ) -> None:
-        """Worker only claims jobs from its data_source."""
+        """Worker claims jobs from all data sources via global queue."""
+        source_a_dir = tmp_path / "source-a"
+        source_a_dir.mkdir()
+        source_b_dir = tmp_path / "source-b"
+        source_b_dir.mkdir()
+
         _insert_job(
             session_factory,
-            "other-source-job",
-            data_source="other-source",
+            "source-a-job",
+            data_source="source-a",
             order=0,
         )
         _insert_job(
             session_factory,
-            "my-job",
-            data_source="test-source",
+            "source-b-job",
+            data_source="source-b",
             order=1,
         )
 
@@ -499,7 +498,7 @@ class TestWorkerLoop:
                 "k_extract.pipeline.worker.run_agent",
                 new_callable=AsyncMock,
                 return_value=mock_result,
-            ),
+            ) as mock_run,
             patch(
                 "k_extract.pipeline.worker.create_tool_server",
                 return_value=None,
@@ -512,19 +511,25 @@ class TestWorkerLoop:
                 session_factory=session_factory,
                 config=config,
                 writer=writer,
-                data_source="test-source",
-                source_path=tmp_path / "source",
+                source_paths={
+                    "source-a": source_a_dir,
+                    "source-b": source_b_dir,
+                },
             )
 
-        # Only "my-job" should be processed
-        assert result.jobs_processed == 1
-        assert result.jobs_succeeded == 1
+        # Both jobs processed
+        assert result.jobs_processed == 2
+        assert result.jobs_succeeded == 2
 
-        # The other-source job should still be pending
-        with session_factory() as session:
-            other_job = session.get(Job, "other-source-job")
-            assert other_job is not None
-            assert other_job.status == JobStatus.PENDING
+        # Verify cwd was set correctly for each data source
+        calls = mock_run.call_args_list
+        assert len(calls) == 2
+        # First call should use source-a's path
+        assert calls[0].kwargs["cwd"] == str(source_a_dir)
+        assert calls[0].kwargs["data_source"] == "source-a"
+        # Second call should use source-b's path
+        assert calls[1].kwargs["cwd"] == str(source_b_dir)
+        assert calls[1].kwargs["data_source"] == "source-b"
 
     @pytest.mark.asyncio
     async def test_emits_create_operations(
@@ -573,8 +578,7 @@ class TestWorkerLoop:
                 session_factory=session_factory,
                 config=config,
                 writer=writer,
-                data_source="test-source",
-                source_path=tmp_path / "source",
+                source_paths={"test-source": tmp_path / "source"},
             )
 
         assert result.jobs_succeeded == 1
@@ -633,8 +637,7 @@ class TestWorkerLoop:
                 session_factory=session_factory,
                 config=config,
                 writer=writer,
-                data_source="test-source",
-                source_path=tmp_path / "source",
+                source_paths={"test-source": tmp_path / "source"},
             )
 
         assert result.cumulative_usage.input_tokens == 200
@@ -675,8 +678,7 @@ class TestWorkerLoop:
                 session_factory=session_factory,
                 config=config,
                 writer=writer,
-                data_source="test-source",
-                source_path=tmp_path / "source",
+                source_paths={"test-source": tmp_path / "source"},
                 progress=progress,
             )
 
@@ -725,8 +727,7 @@ class TestWorkerLoop:
                 session_factory=session_factory,
                 config=config,
                 writer=writer,
-                data_source="test-source",
-                source_path=tmp_path / "source",
+                source_paths={"test-source": tmp_path / "source"},
                 progress=None,
             )
 
