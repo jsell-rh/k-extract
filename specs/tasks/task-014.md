@@ -1,8 +1,8 @@
 # Task 014: CLI Job Reset Command
 
-**Status:** `not-started`
+**Status:** `in-progress`
 **Spec Reference:** specs/concurrency/concurrency-model.md (Section 6: Stale Lock / Stale Job Detection and Recovery)
-**Branch:** (none)
+**Branch:** task-014
 **PR:** (none)
 **Review:** (none)
 
