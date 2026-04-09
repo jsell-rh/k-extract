@@ -1,10 +1,10 @@
 # Task 020: Live Progress Dashboard for `k-extract run`
 
-**Status:** `not-started`
+**Status:** `complete`
 **Spec Reference:** specs/process/extraction-pipeline.md, specs/agent/agent-architecture.md
-**Branch:** (none)
-**PR:** (none)
-**Review:** (none)
+**Branch:** task-020
+**PR:** #20
+**Review:** specs/reviews/task-020.md
 
 ## Description
 
@@ -83,4 +83,9 @@ The `k-extract run` command currently produces zero terminal output during extra
 
 ## Relevant Commits
 
-(none yet)
+- `9e1e7ee` — chore(task-020): begin implementation
+- `a30ebfc` — chore(task-020): add PR number
+- `f74135b` — fix(task-020): address review — lifecycle placement and spinner coverage
+- `4ae9220` — fix(task-020): wrap all Live displays in try/finally for exception-safe cleanup
+- `a27178c` — fix(task-020): reset worker states on data source transition and update progress on crash
+- Merged via PR #20

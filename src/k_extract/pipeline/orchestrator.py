@@ -9,10 +9,14 @@ entity visibility.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import hashlib
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from rich.console import Console
+from rich.live import Live
+from rich.spinner import Spinner
 from sqlalchemy import text as sa_text
 
 from k_extract.config.loader import load_config
@@ -50,6 +54,7 @@ from k_extract.pipeline.jobs import (
     reset_all_in_progress,
     reset_failed_jobs,
 )
+from k_extract.pipeline.progress import PipelineProgress, render_dashboard
 from k_extract.pipeline.sources import discover_files
 from k_extract.pipeline.worker import WorkerResult, worker_loop
 from k_extract.pipeline.writer import JsonlWriter
@@ -129,6 +134,7 @@ async def run_pipeline(
     force: bool = False,
     log_conversations: bool = False,
     db_path: str | None = None,
+    console: Console | None = None,
 ) -> PipelineResult:
     """Execute the extraction pipeline.
 
@@ -143,6 +149,8 @@ async def run_pipeline(
         force: If True, discard previous state and start fresh.
         log_conversations: If True, log agent conversations to JSONL.
         db_path: Override database path from config.
+        console: Rich Console for live dashboard output. If None, no
+            dashboard is displayed.
 
     Returns:
         PipelineResult with completion stats.
@@ -151,114 +159,131 @@ async def run_pipeline(
     result = PipelineResult()
     settings = get_settings()
 
-    # 1. Load and validate config
-    config = load_config(config_path)
-    log.info("pipeline.config_loaded", config_path=str(config_path))
+    # Setup spinner — shows during config loading, fingerprinting, resume eval
+    setup_live: Live | None = None
+    if console is not None:
+        setup_live = Live(
+            Spinner("dots", text="Setting up pipeline..."),
+            console=console,
+            transient=True,
+        )
+        setup_live.start()
 
-    # 2. Determine database and output paths
-    effective_db_path = db_path or config.output.database
-    output_path = Path(config.output.file)
-    result.output_file = str(output_path)
+    try:
+        # 1. Load and validate config
+        config = load_config(config_path)
+        log.info("pipeline.config_loaded", config_path=str(config_path))
 
-    # 3. Create database engine and session factory
-    engine = create_engine_with_wal(effective_db_path)
-    session_factory = create_session_factory(engine)
+        # 2. Determine database and output paths
+        effective_db_path = db_path or config.output.database
+        output_path = Path(config.output.file)
+        result.output_file = str(output_path)
 
-    # 4. Discover model capabilities (context window, max output tokens)
-    model_caps = await discover_model_capabilities(model=settings.model_id)
-    context_window = model_caps.context_window
-    output_reservation = model_caps.max_output_tokens
-    log.info(
-        "pipeline.model_capabilities",
-        context_window=context_window,
-        output_reservation=output_reservation,
-    )
+        # 3. Create database engine and session factory
+        engine = create_engine_with_wal(effective_db_path)
+        session_factory = create_session_factory(engine)
 
-    # 5. Build domain ontology from config
-    ontology = build_ontology_from_config(config.ontology)
+        # 4. Discover model capabilities (context window, max output tokens)
+        model_caps = await discover_model_capabilities(model=settings.model_id)
+        context_window = model_caps.context_window
+        output_reservation = model_caps.max_output_tokens
+        log.info(
+            "pipeline.model_capabilities",
+            context_window=context_window,
+            output_reservation=output_reservation,
+        )
 
-    # 6. Compute environment fingerprint
-    all_source_files: list[str] = []
-    for ds in config.data_sources:
-        ds_path = Path(ds.path)
-        if ds_path.is_dir():
-            files = discover_files(ds_path)
-            all_source_files.extend(str(ds_path / f.path) for f in files)
+        # 5. Build domain ontology from config
+        ontology = build_ontology_from_config(config.ontology)
 
-    source_file_paths: list[str | Path] = list(all_source_files)
-    file_hashes = hash_files_parallel(source_file_paths)
+        # 6. Compute environment fingerprint
+        all_source_files: list[str] = []
+        for ds in config.data_sources:
+            ds_path = Path(ds.path)
+            if ds_path.is_dir():
+                files = discover_files(ds_path)
+                all_source_files.extend(str(ds_path / f.path) for f in files)
 
-    prompt_templates = (
-        config.prompts.system_prompt + config.prompts.job_description_template
-    )
-    config_contents = config_path.read_text(encoding="utf-8")
-    config_hash = hashlib.sha256(config_contents.encode("utf-8")).hexdigest()
+        source_file_paths: list[str | Path] = list(all_source_files)
+        file_hashes = hash_files_parallel(source_file_paths)
 
-    current_fingerprint = compute_fingerprint(
-        config_contents=config_contents,
-        prompt_templates=prompt_templates,
-        model_id=settings.model_id,
-        file_hashes=file_hashes,
-    )
+        prompt_templates = (
+            config.prompts.system_prompt + config.prompts.job_description_template
+        )
+        config_contents = config_path.read_text(encoding="utf-8")
+        config_hash = hashlib.sha256(config_contents.encode("utf-8")).hexdigest()
 
-    # 7. Evaluate resume decision
-    with session_factory() as session:
-        decision = evaluate_resume(session, current_fingerprint, force=force)
+        current_fingerprint = compute_fingerprint(
+            config_contents=config_contents,
+            prompt_templates=prompt_templates,
+            model_id=settings.model_id,
+            file_hashes=file_hashes,
+        )
 
-    log.info(
-        "pipeline.resume_decision",
-        action=decision.action.value,
-        message=decision.message,
-    )
+        # 7. Evaluate resume decision
+        with session_factory() as session:
+            decision = evaluate_resume(session, current_fingerprint, force=force)
 
-    if decision.action == ResumeAction.HARD_STOP:
-        raise SystemExit(decision.message)
+        log.info(
+            "pipeline.resume_decision",
+            action=decision.action.value,
+            message=decision.message,
+        )
 
-    is_fresh = decision.action == ResumeAction.FRESH_START
+        if decision.action == ResumeAction.HARD_STOP:
+            raise SystemExit(decision.message)
 
-    # 8. Create ontology store (before fresh-start handling so tables exist)
-    ontology_engine = create_engine_with_wal(effective_db_path)
-    store = OntologyStore(ontology_engine, ontology)
+        is_fresh = decision.action == ResumeAction.FRESH_START
 
-    # 9. Handle fresh start vs resume
-    with session_factory() as session:
+        # 8. Create ontology store (before fresh-start handling so tables exist)
+        ontology_engine = create_engine_with_wal(effective_db_path)
+        store = OntologyStore(ontology_engine, ontology)
+
+        # 9. Handle fresh start vs resume
+        with session_factory() as session:
+            if is_fresh:
+                # Delete all existing jobs
+                session.execute(sa_text("DELETE FROM jobs"))
+                # Clear ontology store tables (shared same database)
+                session.execute(sa_text("DELETE FROM entity_instances"))
+                session.execute(sa_text("DELETE FROM relationship_instances"))
+                session.execute(sa_text("DELETE FROM staged_entities"))
+                session.execute(sa_text("DELETE FROM staged_relationships"))
+                session.commit()
+                # Store new fingerprint
+                store_fingerprint(
+                    session, current_fingerprint, config_hash, settings.model_id
+                )
+            else:
+                # Resume: unconditionally reset all in_progress jobs (startup reset)
+                stale_count = reset_all_in_progress(session)
+                if stale_count > 0:
+                    log.info("pipeline.stale_jobs_reset", count=stale_count)
+                # Reset failed jobs to pending for retry
+                failed_count = reset_failed_jobs(session)
+                if failed_count > 0:
+                    log.info("pipeline.failed_jobs_reset", count=failed_count)
+
+        # 10. Emit DEFINE operations (only on fresh start)
+        if is_fresh and output_path.exists():
+            output_path.unlink()
+        writer = JsonlWriter(output_path)
         if is_fresh:
-            # Delete all existing jobs
-            session.execute(sa_text("DELETE FROM jobs"))
-            # Clear ontology store tables (shared same database)
-            session.execute(sa_text("DELETE FROM entity_instances"))
-            session.execute(sa_text("DELETE FROM relationship_instances"))
-            session.execute(sa_text("DELETE FROM staged_entities"))
-            session.execute(sa_text("DELETE FROM staged_relationships"))
-            session.commit()
-            # Store new fingerprint
-            store_fingerprint(
-                session, current_fingerprint, config_hash, settings.model_id
-            )
-        else:
-            # Resume: unconditionally reset all in_progress jobs (startup reset)
-            stale_count = reset_all_in_progress(session)
-            if stale_count > 0:
-                log.info("pipeline.stale_jobs_reset", count=stale_count)
-            # Reset failed jobs to pending for retry
-            failed_count = reset_failed_jobs(session)
-            if failed_count > 0:
-                log.info("pipeline.failed_jobs_reset", count=failed_count)
+            defines = generate_defines(config.ontology)
+            await writer.write_operations(defines)
+            log.info("pipeline.defines_emitted", count=len(defines))
 
-    # 10. Emit DEFINE operations (only on fresh start)
-    if is_fresh and output_path.exists():
-        output_path.unlink()
-    writer = JsonlWriter(output_path)
-    if is_fresh:
-        defines = generate_defines(config.ontology)
-        await writer.write_operations(defines)
-        log.info("pipeline.defines_emitted", count=len(defines))
+        # 11. Set up conversation logging directory
+        conversation_log_dir: Path | None = None
+        if log_conversations:
+            conversation_log_dir = Path("logs") / "conversations"
+            conversation_log_dir.mkdir(parents=True, exist_ok=True)
+    finally:
+        if setup_live is not None:
+            setup_live.stop()
 
-    # 11. Set up conversation logging directory
-    conversation_log_dir: Path | None = None
-    if log_conversations:
-        conversation_log_dir = Path("logs") / "conversations"
-        conversation_log_dir.mkdir(parents=True, exist_ok=True)
+    if console is not None:
+        console.print("[green]✓[/green] Pipeline setup complete")
 
     # 12. Process data sources in configured order
     jobs_processed_total = 0
@@ -277,40 +302,61 @@ async def run_pipeline(
         context_window, prompt_overhead, output_reservation, SAFETY_MARGIN
     )
 
+    # Create progress tracker once at pipeline start (persists across data sources)
+    progress: PipelineProgress | None = None
+    if console is not None:
+        progress = PipelineProgress(workers)
+
     for ds in config.data_sources:
         ds_path = Path(ds.path)
         log.info("pipeline.processing_source", data_source=ds.name)
 
-        # Generate jobs for this source if fresh start or no jobs exist
-        with session_factory() as session:
-            existing_count = session.execute(
-                sa_text("SELECT COUNT(*) FROM jobs WHERE data_source = :ds"),
-                {"ds": ds.name},
-            ).scalar()
-
-        if existing_count == 0:
-            files = discover_files(ds_path)
-            file_infos = [FileInfo(path=f.path, char_count=f.char_count) for f in files]
-
-            start_order = 0
-            with session_factory() as session:
-                max_order_result = session.execute(
-                    sa_text('SELECT COALESCE(MAX("order"), -1) FROM jobs')
-                ).scalar()
-                # COALESCE guarantees non-null; cast for type checker
-                max_order: int = int(max_order_result)  # type: ignore[arg-type]
-                start_order = max_order + 1
-
-            jobs = create_jobs(file_infos, ds.name, available_tokens, start_order)
-            with session_factory() as session:
-                for job in jobs:
-                    session.add(job)
-                session.commit()
-            log.info(
-                "pipeline.jobs_generated",
-                data_source=ds.name,
-                count=len(jobs),
+        # Show spinner during job generation (part of setup phase)
+        job_gen_live: Live | None = None
+        if console is not None:
+            job_gen_live = Live(
+                Spinner("dots", text=f"Generating jobs for {ds.name}..."),
+                console=console,
+                transient=True,
             )
+            job_gen_live.start()
+
+        try:
+            # Generate jobs for this source if fresh start or no jobs exist
+            with session_factory() as session:
+                existing_count = session.execute(
+                    sa_text("SELECT COUNT(*) FROM jobs WHERE data_source = :ds"),
+                    {"ds": ds.name},
+                ).scalar()
+
+            if existing_count == 0:
+                files = discover_files(ds_path)
+                file_infos = [
+                    FileInfo(path=f.path, char_count=f.char_count) for f in files
+                ]
+
+                start_order = 0
+                with session_factory() as session:
+                    max_order_result = session.execute(
+                        sa_text('SELECT COALESCE(MAX("order"), -1) FROM jobs')
+                    ).scalar()
+                    # COALESCE guarantees non-null; cast for type checker
+                    max_order: int = int(max_order_result)  # type: ignore[arg-type]
+                    start_order = max_order + 1
+
+                jobs = create_jobs(file_infos, ds.name, available_tokens, start_order)
+                with session_factory() as session:
+                    for job in jobs:
+                        session.add(job)
+                    session.commit()
+                log.info(
+                    "pipeline.jobs_generated",
+                    data_source=ds.name,
+                    count=len(jobs),
+                )
+        finally:
+            if job_gen_live is not None:
+                job_gen_live.stop()
 
         # Count total and pending jobs for this source
         with session_factory() as session:
@@ -379,27 +425,69 @@ async def run_pipeline(
             shared_counter = [0]
 
         worker_count = min(workers, source_pending)
-        worker_tasks = []
-        for i in range(worker_count):
-            worker_id = f"{i + 1:02d}"
-            worker_tasks.append(
-                worker_loop(
-                    worker_id=worker_id,
-                    store=store,
-                    ontology=ontology,
-                    session_factory=session_factory,
-                    config=config,
-                    writer=writer,
-                    data_source=ds.name,
-                    source_path=ds_path,
-                    conversation_log_dir=conversation_log_dir,
-                    max_jobs=source_max,
-                    shared_counter=shared_counter,
-                    model_id=settings.model_id,
-                )
-            )
 
-        gather_results = await asyncio.gather(*worker_tasks, return_exceptions=True)
+        # Update progress tracker for this data source and start live dashboard
+        live: Live | None = None
+        if console is not None and progress is not None:
+            progress.set_data_source(ds.name, source_total, source_pending)
+            live = Live(
+                render_dashboard(progress),
+                console=console,
+                refresh_per_second=2,
+                transient=True,
+            )
+            live.start()
+
+        try:
+            worker_tasks = []
+            for i in range(worker_count):
+                worker_id = f"{i + 1:02d}"
+                worker_tasks.append(
+                    worker_loop(
+                        worker_id=worker_id,
+                        store=store,
+                        ontology=ontology,
+                        session_factory=session_factory,
+                        config=config,
+                        writer=writer,
+                        data_source=ds.name,
+                        source_path=ds_path,
+                        conversation_log_dir=conversation_log_dir,
+                        max_jobs=source_max,
+                        shared_counter=shared_counter,
+                        model_id=settings.model_id,
+                        progress=progress,
+                    )
+                )
+
+            if live is not None:
+                assert progress is not None
+
+                async def _refresh(lv: Live, pg: PipelineProgress) -> None:
+                    while True:
+                        await asyncio.sleep(0.5)
+                        lv.update(render_dashboard(pg))
+
+                refresh_task = asyncio.create_task(_refresh(live, progress))
+                try:
+                    gather_results = await asyncio.gather(
+                        *worker_tasks, return_exceptions=True
+                    )
+                finally:
+                    refresh_task.cancel()
+                    with contextlib.suppress(asyncio.CancelledError):
+                        await refresh_task
+                # Final update before stopping
+                live.update(render_dashboard(progress))  # type: ignore[arg-type]
+                # Print final state as static output for scrollback
+                console.print(render_dashboard(progress))  # type: ignore[arg-type]
+            else:
+                gather_results = await asyncio.gather(
+                    *worker_tasks, return_exceptions=True
+                )
+        finally:
+            if live is not None:
+                live.stop()
 
         # Aggregate worker results, handling any unhandled exceptions
         worker_results: list[WorkerResult] = []

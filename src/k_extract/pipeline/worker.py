@@ -22,6 +22,7 @@ from k_extract.extraction.store import OntologyStore
 from k_extract.extraction.tools import create_tool_server
 from k_extract.pipeline.defines import generate_creates
 from k_extract.pipeline.jobs import claim_next_job, mark_completed, mark_failed
+from k_extract.pipeline.progress import PipelineProgress, WorkerStatus
 from k_extract.pipeline.writer import JsonlWriter
 
 
@@ -55,6 +56,7 @@ async def worker_loop(
     max_jobs: int | None = None,
     shared_counter: list[int] | None = None,
     model_id: str | None = None,
+    progress: PipelineProgress | None = None,
 ) -> WorkerResult:
     """Run the worker loop: claim, process, record.
 
@@ -77,6 +79,8 @@ async def worker_loop(
             across workers for global max_jobs enforcement. Since asyncio
             is single-threaded, no lock is needed.
         model_id: Model ID to pass to run_agent. None uses SDK default.
+        progress: Optional PipelineProgress for live dashboard updates.
+            If None, progress reporting is silently skipped.
 
     Returns:
         WorkerResult with aggregated stats.
@@ -104,6 +108,10 @@ async def worker_loop(
             # to prevent other workers from exceeding the cap
             if shared_counter is not None:
                 shared_counter[0] += 1
+
+            # Report job claimed to progress tracker
+            if progress is not None:
+                progress.mark_worker_processing(worker_id, job.job_id)
 
             log.info(
                 "extraction.job_claimed",
@@ -160,6 +168,9 @@ async def worker_loop(
                 with session_factory() as session:
                     mark_completed(session, job.job_id)
                 result.jobs_succeeded += 1
+                if progress is not None:
+                    job_cost = agent_result.usage.cost_usd or 0.0
+                    progress.record_job_completed(worker_id, job_cost)
                 log.info("extraction.job_completed", job_id=job.job_id)
             else:
                 # Mark job as failed
@@ -167,6 +178,8 @@ async def worker_loop(
                 with session_factory() as session:
                     mark_failed(session, job.job_id, error_msg)
                 result.jobs_failed += 1
+                if progress is not None:
+                    progress.record_job_failed(worker_id)
                 result.failed_job_details.append((job.job_id, error_msg))
                 log.error(
                     "extraction.job_failed",
@@ -179,5 +192,14 @@ async def worker_loop(
             worker_id=worker_id,
             error=str(exc),
         )
+        # If a job was in-flight when the crash occurred, update the
+        # progress tracker so dashboard counts remain accurate.
+        if progress is not None:
+            ws = progress.workers.get(worker_id)
+            if ws is not None and ws.status == WorkerStatus.PROCESSING:
+                progress.record_job_failed(worker_id)
+
+    if progress is not None:
+        progress.mark_worker_finished(worker_id)
 
     return result

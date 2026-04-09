@@ -36,6 +36,8 @@ The system scans all provided paths and reports what it found:
 - Rough volume (file count, total size)
 - Any recognizable patterns (e.g., "this looks like a Python package", "this contains markdown documentation")
 
+Files matched by `.gitignore` (if present in a data source) are excluded from the inventory. This prevents build artifacts, vendored dependencies, and generated files from polluting the scan.
+
 This gives the user and the system a shared understanding of the raw material before proposing an ontology.
 
 ### Step 3: Ontology Proposal

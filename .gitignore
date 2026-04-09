@@ -1,5 +1,9 @@
+extraction.yaml 
 __pycache__/
 *.pyc
 *.egg-info/
 dist/
 .pytest_cache/
+graph.jsonl
+extraction.db
+extraction.db*

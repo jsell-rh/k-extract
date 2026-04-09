@@ -122,9 +122,10 @@ Resuming is only safe if the extraction environment hasn't changed since the pre
 
 At the start of each run, the system computes a **cryptographic environment fingerprint**:
 
-1. Hash every source file (SHA256) in parallel — files are independent I/O operations
-2. Sort the file hashes by filepath for deterministic ordering
-3. Compute a final SHA256 over the concatenation of:
+1. Enumerate all source files, respecting `.gitignore` in each data source (if present). Files matched by `.gitignore` are excluded from fingerprinting, batching, and extraction.
+2. Hash every enumerated source file (SHA256) in parallel — files are independent I/O operations
+3. Sort the file hashes by filepath for deterministic ordering
+4. Compute a final SHA256 over the concatenation of:
    - Config file contents (problem statement, ontology definition, all settings)
    - Generated prompt templates (system prompt + job description template)
    - Model ID
