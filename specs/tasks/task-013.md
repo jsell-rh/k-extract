@@ -52,3 +52,5 @@ Reference: specs/process/extraction-pipeline.md sections on Job Inspection and U
 - [ ] Tests for all display modes
 
 ## Relevant Commits
+
+- `05f9dd4` — feat(task-013): implement CLI jobs command
