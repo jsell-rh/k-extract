@@ -1,6 +1,6 @@
 # Task 019: Rich Terminal UI — Streaming Feedback for `k-extract init`
 
-**Status:** `ready-for-review`
+**Status:** `complete`
 **Spec Reference:** specs/process/guided-session.md
 **Branch:** task-019
 **PR:** #19
@@ -72,3 +72,4 @@ The `k-extract init` command currently prints a static status line (e.g., "Gener
 
 - `dcb6808` — feat(task-019): Rich terminal UI with streaming feedback for k-extract init
 - `7a66e06` — fix(task-019): use rich.live.Live for stream_thinking overwriting
+- Merged via PR #19
