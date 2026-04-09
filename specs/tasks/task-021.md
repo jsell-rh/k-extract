@@ -3,7 +3,7 @@
 **Status:** `in-progress`
 **Spec Reference:** specs/process/guided-session.md, specs/process/extraction-pipeline.md
 **Branch:** task-021
-**PR:** (none)
+**PR:** #21
 **Review:** (none)
 
 ## Description
