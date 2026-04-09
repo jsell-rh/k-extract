@@ -35,6 +35,7 @@ from k_extract.pipeline.database import (
     create_engine_with_wal,
     create_session_factory,
 )
+from k_extract.pipeline.progress import PipelineProgress, WorkerStatus
 from k_extract.pipeline.worker import worker_loop
 from k_extract.pipeline.writer import JsonlWriter
 
@@ -639,3 +640,95 @@ class TestWorkerLoop:
         assert result.cumulative_usage.input_tokens == 200
         assert result.cumulative_usage.output_tokens == 100
         assert result.cumulative_usage.cost_usd == pytest.approx(0.02)
+
+    @pytest.mark.asyncio
+    async def test_crash_updates_progress_for_inflight_job(
+        self,
+        tmp_path: Path,
+        session_factory,
+        store: OntologyStore,
+        ontology: Ontology,
+        config: ExtractionConfig,
+        writer: JsonlWriter,
+    ) -> None:
+        """Worker crash during processing updates progress tracker for in-flight job."""
+        _insert_job(session_factory, "crash-job")
+
+        progress = PipelineProgress(worker_count=1)
+        progress.set_data_source("test-source", total=1, pending=1)
+
+        with (
+            patch(
+                "k_extract.pipeline.worker.run_agent",
+                new_callable=AsyncMock,
+                side_effect=RuntimeError("unexpected crash"),
+            ),
+            patch(
+                "k_extract.pipeline.worker.create_tool_server",
+                return_value=None,
+            ),
+        ):
+            result = await worker_loop(
+                worker_id="01",
+                store=store,
+                ontology=ontology,
+                session_factory=session_factory,
+                config=config,
+                writer=writer,
+                data_source="test-source",
+                source_path=tmp_path / "source",
+                progress=progress,
+            )
+
+        # The crash should have been recorded as a failure in progress
+        assert progress.failed_jobs == 1
+        assert progress.pending_jobs == 0
+        # Worker should end in FINISHED state
+        assert progress.workers["01"].status == WorkerStatus.FINISHED
+        # Worker result reflects 0 processed (crash happened during processing)
+        assert result.jobs_processed == 0
+
+    @pytest.mark.asyncio
+    async def test_progress_none_safe(
+        self,
+        tmp_path: Path,
+        session_factory,
+        store: OntologyStore,
+        ontology: Ontology,
+        config: ExtractionConfig,
+        writer: JsonlWriter,
+    ) -> None:
+        """Worker loop works correctly when progress=None (default)."""
+        _insert_job(session_factory, "job-no-progress")
+
+        mock_result = AgentResult(
+            success=True,
+            error_message=None,
+            usage=UsageStats(),
+        )
+
+        with (
+            patch(
+                "k_extract.pipeline.worker.run_agent",
+                new_callable=AsyncMock,
+                return_value=mock_result,
+            ),
+            patch(
+                "k_extract.pipeline.worker.create_tool_server",
+                return_value=None,
+            ),
+        ):
+            result = await worker_loop(
+                worker_id="01",
+                store=store,
+                ontology=ontology,
+                session_factory=session_factory,
+                config=config,
+                writer=writer,
+                data_source="test-source",
+                source_path=tmp_path / "source",
+                progress=None,
+            )
+
+        assert result.jobs_processed == 1
+        assert result.jobs_succeeded == 1

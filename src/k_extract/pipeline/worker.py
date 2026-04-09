@@ -22,7 +22,7 @@ from k_extract.extraction.store import OntologyStore
 from k_extract.extraction.tools import create_tool_server
 from k_extract.pipeline.defines import generate_creates
 from k_extract.pipeline.jobs import claim_next_job, mark_completed, mark_failed
-from k_extract.pipeline.progress import PipelineProgress
+from k_extract.pipeline.progress import PipelineProgress, WorkerStatus
 from k_extract.pipeline.writer import JsonlWriter
 
 
@@ -192,6 +192,12 @@ async def worker_loop(
             worker_id=worker_id,
             error=str(exc),
         )
+        # If a job was in-flight when the crash occurred, update the
+        # progress tracker so dashboard counts remain accurate.
+        if progress is not None:
+            ws = progress.workers.get(worker_id)
+            if ws is not None and ws.status == WorkerStatus.PROCESSING:
+                progress.record_job_failed(worker_id)
 
     if progress is not None:
         progress.mark_worker_finished(worker_id)

@@ -76,6 +76,11 @@ class PipelineProgress:
         # Reset completed/failed for this data source display
         self.completed_jobs = total - pending
         self.failed_jobs = 0
+        # Reset all worker states to IDLE for the new data source
+        for ws in self.workers.values():
+            ws.status = WorkerStatus.IDLE
+            ws.current_job_id = None
+            ws.job_start_time = None
 
     def mark_worker_idle(self, worker_id: str) -> None:
         """Mark a worker as idle (no current job)."""

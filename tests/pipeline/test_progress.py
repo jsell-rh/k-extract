@@ -145,6 +145,40 @@ class TestPipelineProgress:
         assert progress.cumulative_cost == pytest.approx(4.25)
         assert progress.completed_jobs == 3
 
+    def test_set_data_source_resets_worker_states(self) -> None:
+        """set_data_source resets all worker states to IDLE."""
+        progress = PipelineProgress(worker_count=3)
+        progress.set_data_source("source-a", total=5, pending=5)
+
+        # Simulate workers finishing data source A
+        progress.mark_worker_finished("01")
+        progress.mark_worker_processing("02", "job-x")
+        progress.mark_worker_finished("03")
+
+        assert progress.workers["01"].status == WorkerStatus.FINISHED
+        assert progress.workers["02"].status == WorkerStatus.PROCESSING
+        assert progress.workers["03"].status == WorkerStatus.FINISHED
+
+        # Transition to data source B
+        progress.set_data_source("source-b", total=3, pending=3)
+
+        # All workers should be IDLE for the new data source
+        for wid in ("01", "02", "03"):
+            ws = progress.workers[wid]
+            assert ws.status == WorkerStatus.IDLE
+            assert ws.current_job_id is None
+            assert ws.job_start_time is None
+
+    def test_set_data_source_preserves_cumulative_cost(self) -> None:
+        """set_data_source preserves cumulative cost across sources."""
+        progress = PipelineProgress(worker_count=1)
+        progress.set_data_source("source-a", total=5, pending=5)
+        progress.record_job_completed("01", cost=2.50)
+
+        progress.set_data_source("source-b", total=3, pending=3)
+
+        assert progress.cumulative_cost == pytest.approx(2.50)
+
 
 class TestRenderDashboard:
     def test_renders_without_error(self) -> None:
