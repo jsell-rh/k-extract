@@ -1,6 +1,6 @@
 # Task 012: Extraction Pipeline — `k-extract run` Orchestrator and Workers
 
-**Status:** `ready-for-review`
+**Status:** `complete`
 **Spec Reference:** specs/process/extraction-pipeline.md, specs/concurrency/concurrency-model.md
 **Branch:** task-012
 **PR:** #12
@@ -81,3 +81,4 @@ Reference: specs/process/extraction-pipeline.md, specs/concurrency/concurrency-m
 - `b857cd8` — fix(task-012): address all review findings from round 1
 - `de94f37` — fix(task-012): address all review findings from round 2
 - `5a9fef6` — fix(task-012): address all review findings from round 3
+- Merged via PR #12
