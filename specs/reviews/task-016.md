@@ -1,0 +1,7 @@
+# Review: Task 016
+
+## Round 1
+
+- [ ] **Missing caching in `discover_model_capabilities`** (`src/k_extract/extraction/agent.py:46-109`). The task description explicitly requires "Cache the result for reuse" as a bullet point under the discovery function design. The implementation makes a fresh SDK API call on every invocation with no caching mechanism (no module-level variable, no `functools.lru_cache`, no async-aware cache). While the orchestrator currently calls the function only once per pipeline run, the task requirement is unambiguous and a second call from any other component would incur an unnecessary API roundtrip. Ref: task-016.md "What to build" item 1, bullet 4.
+
+- [ ] **Orchestrator tests mock discovery with the same values as the removed constants** (`tests/pipeline/test_orchestrator.py:284-290`). The `_mock_discovery` fixture returns `ModelCapabilities(context_window=200_000, max_output_tokens=50_000)` -- exactly the same values as the deleted `CONTEXT_WINDOW = 200_000` and `OUTPUT_RESERVATION = 50_000`. No orchestrator test uses different discovered values to verify that batching actually changes based on discovery output. If someone replaced `model_caps.context_window` with a hardcoded `200_000` in the orchestrator, every test would still pass. The acceptance criterion "Discovered values are used for job batching instead of hardcoded constants" is unverified at the integration level. Ref: task-016.md Acceptance Criteria bullet 2; specs/process/job-lifecycle.md "No magic numbers" principle.
