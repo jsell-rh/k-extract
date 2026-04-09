@@ -1,6 +1,6 @@
 # Task 015: Add Entity Creation Mode to manage_entity Tool
 
-**Status:** `ready-for-review`
+**Status:** `complete`
 **Spec Reference:** specs/agent/agent-tools.md (Section 3: Manage Entity)
 **Branch:** task-015
 **PR:** #15
@@ -61,3 +61,4 @@ Reference: specs/agent/agent-tools.md section 3 — the spec describes "Edit-onl
 ## Relevant Commits
 
 - `191e9b9` — feat(task-015): add entity creation mode to manage_entity tool
+- Merged via PR #15
