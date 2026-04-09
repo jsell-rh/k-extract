@@ -3,7 +3,7 @@
 **Status:** `in-progress`
 **Spec Reference:** specs/decisions/technology-choices.md (Configuration, Model Configuration)
 **Branch:** task-017
-**PR:** (none)
+**PR:** #17
 **Review:** (none)
 
 ## Description
