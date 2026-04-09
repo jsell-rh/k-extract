@@ -102,6 +102,66 @@ def _make_config(
     return config_path, source_dir
 
 
+def _make_multi_source_config(
+    tmp_path: Path,
+    source_names: list[str],
+) -> Path:
+    """Create config with multiple data sources, each with a file.
+
+    Returns config_path.
+    """
+    data_sources = []
+    for name in source_names:
+        source_dir = tmp_path / name
+        source_dir.mkdir()
+        (source_dir / "doc.md").write_text(f"# {name}\nContent")
+        data_sources.append(DataSourceConfig(name=name, path=str(source_dir)))
+
+    ontology_config = OntologyConfig(
+        entity_types=[
+            EntityTypeConfig(
+                label="Document",
+                description="A document",
+                required_properties=["title"],
+                optional_properties=[],
+            ),
+        ],
+        relationship_types=[
+            RelationshipTypeConfig(
+                label="REFERENCES",
+                description="References another document",
+                source_entity_type="Document",
+                target_entity_type="Document",
+                required_properties=[],
+                optional_properties=[],
+            ),
+        ],
+    )
+
+    config = ExtractionConfig(
+        problem_statement="Test extraction",
+        data_sources=data_sources,
+        ontology=ontology_config,
+        prompts=PromptsConfig(
+            system_prompt="You are an extractor.",
+            job_description_template=(
+                "Job {job_id}: process {file_count} files "
+                "({total_characters} chars)\n{file_list}"
+            ),
+        ),
+        output=OutputConfig(
+            file=str(tmp_path / "output.jsonl"),
+            database=str(tmp_path / "test.db"),
+        ),
+    )
+
+    from k_extract.config.loader import save_config
+
+    config_path = tmp_path / "extraction.yaml"
+    save_config(config, config_path)
+    return config_path
+
+
 class TestBuildOntologyFromConfig:
     def test_entity_types_mapped(self) -> None:
         config = OntologyConfig(
@@ -774,3 +834,92 @@ class TestRunPipeline:
                 workers=1,
                 db_path=str(tmp_path / "test.db"),
             )
+
+    @pytest.mark.asyncio
+    async def test_upfront_job_generation_all_sources(self, tmp_path: Path) -> None:
+        """All jobs for all data sources are generated before workers run."""
+        config_path = _make_multi_source_config(
+            tmp_path, ["source-a", "source-b", "source-c"]
+        )
+        db_path = str(tmp_path / "test.db")
+
+        # Track when jobs exist vs when agent runs
+        jobs_at_agent_call: list[int] = []
+
+        async def mock_run_agent(**kwargs):
+            from sqlalchemy import text as sa_text
+
+            from k_extract.pipeline.database import create_engine_with_wal
+
+            engine = create_engine_with_wal(db_path)
+            with engine.connect() as conn:
+                count = conn.execute(sa_text("SELECT COUNT(*) FROM jobs")).scalar()
+                jobs_at_agent_call.append(count or 0)
+            engine.dispose()
+            return AgentResult(
+                success=True,
+                error_message=None,
+                usage=UsageStats(),
+            )
+
+        with (
+            patch(
+                "k_extract.pipeline.worker.run_agent",
+                side_effect=mock_run_agent,
+            ),
+            patch(
+                "k_extract.pipeline.worker.create_tool_server",
+                return_value=None,
+            ),
+        ):
+            result = await run_pipeline(
+                config_path=config_path,
+                workers=1,
+                db_path=db_path,
+            )
+
+        # All 3 sources should have jobs (1 job each, 1 file each)
+        assert result.total_jobs == 3
+        assert result.completed_jobs == 3
+        # Every time the agent ran, ALL jobs already existed
+        assert len(jobs_at_agent_call) == 3
+        for count in jobs_at_agent_call:
+            assert count == 3, "All jobs should exist before any worker starts"
+
+    @pytest.mark.asyncio
+    async def test_global_queue_workers_process_all_sources(
+        self, tmp_path: Path
+    ) -> None:
+        """Workers claim from global queue across data sources."""
+        config_path = _make_multi_source_config(tmp_path, ["source-x", "source-y"])
+
+        data_sources_seen: list[str] = []
+
+        async def mock_run_agent(**kwargs):
+            data_sources_seen.append(kwargs["data_source"])
+            return AgentResult(
+                success=True,
+                error_message=None,
+                usage=UsageStats(),
+            )
+
+        with (
+            patch(
+                "k_extract.pipeline.worker.run_agent",
+                side_effect=mock_run_agent,
+            ),
+            patch(
+                "k_extract.pipeline.worker.create_tool_server",
+                return_value=None,
+            ),
+        ):
+            result = await run_pipeline(
+                config_path=config_path,
+                workers=1,
+                db_path=str(tmp_path / "test.db"),
+            )
+
+        assert result.total_jobs == 2
+        assert result.completed_jobs == 2
+        # Worker processed jobs from both sources
+        assert set(data_sources_seen) == {"source-x", "source-y"}

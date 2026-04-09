@@ -50,8 +50,7 @@ async def worker_loop(
     session_factory: sessionmaker,
     config: ExtractionConfig,
     writer: JsonlWriter,
-    data_source: str,
-    source_path: Path,
+    source_paths: dict[str, Path],
     conversation_log_dir: Path | None = None,
     max_jobs: int | None = None,
     shared_counter: list[int] | None = None,
@@ -60,9 +59,9 @@ async def worker_loop(
 ) -> WorkerResult:
     """Run the worker loop: claim, process, record.
 
-    Claims jobs from the queue, runs an agent for each, and records
-    results. Continues until no pending jobs remain or the max_jobs
-    cap is reached.
+    Claims jobs from the global queue (across all data sources), runs
+    an agent for each, and records results. Continues until no pending
+    jobs remain or the max_jobs cap is reached.
 
     Args:
         worker_id: Zero-padded worker identifier (e.g., "01").
@@ -71,8 +70,7 @@ async def worker_loop(
         session_factory: Database session factory for job operations.
         config: Extraction config.
         writer: JSONL writer for output operations.
-        data_source: Data source name to claim jobs from.
-        source_path: Filesystem path to the data source.
+        source_paths: Mapping of data source name to filesystem path.
         conversation_log_dir: If set, log agent conversations to this dir.
         max_jobs: Cap on total jobs this worker should process.
         shared_counter: If provided, a single-element list [count] shared
@@ -85,7 +83,7 @@ async def worker_loop(
     Returns:
         WorkerResult with aggregated stats.
     """
-    log = get_logger(worker_id=worker_id, data_source=data_source)
+    log = get_logger(worker_id=worker_id)
     result = WorkerResult()
 
     try:
@@ -97,9 +95,9 @@ async def worker_loop(
             ):
                 break
 
-            # Claim next job
+            # Claim next job from global queue (any data source)
             with session_factory() as session:
-                job = claim_next_job(session, worker_id, data_source=data_source)
+                job = claim_next_job(session, worker_id)
 
             if job is None:
                 break
@@ -109,6 +107,9 @@ async def worker_loop(
             if shared_counter is not None:
                 shared_counter[0] += 1
 
+            # Resolve source path from the job's data_source field
+            source_path = source_paths[job.data_source]
+
             # Report job claimed to progress tracker
             if progress is not None:
                 progress.mark_worker_processing(worker_id, job.job_id)
@@ -116,6 +117,7 @@ async def worker_loop(
             log.info(
                 "extraction.job_claimed",
                 job_id=job.job_id,
+                data_source=job.data_source,
                 file_count=job.file_count,
                 total_characters=job.total_characters,
             )
@@ -148,7 +150,7 @@ async def worker_loop(
                 initial_message=initial_message,
                 mcp_server=mcp_server,
                 job_id=job.job_id,
-                data_source=data_source,
+                data_source=job.data_source,
                 cwd=str(source_path),
                 conversation_log_dir=conversation_log_dir,
                 model=model_id,
@@ -164,7 +166,7 @@ async def worker_loop(
                     creates = generate_creates(
                         committed_entities,
                         committed_rels,
-                        data_source,
+                        job.data_source,
                         ontology,
                     )
                     await writer.write_operations(creates)

@@ -134,61 +134,38 @@ def create_jobs(
 def claim_next_job(
     session: Session,
     agent_instance_id: str,
-    data_source: str | None = None,
 ) -> Job | None:
-    """Atomically claim the next pending job via single SQL statement.
+    """Atomically claim the next pending job from the global queue.
 
     Uses UPDATE...WHERE...RETURNING to atomically find and claim the
-    next pending job ordered by the 'order' field.
+    next pending job ordered by the 'order' field. Claims globally
+    across all data sources.
 
     Args:
         session: Database session.
         agent_instance_id: Worker identifier.
-        data_source: If provided, only claim jobs from this data source.
     """
     now = datetime.now(UTC)
 
-    if data_source is not None:
-        result = session.execute(
-            text(
-                "UPDATE jobs "
-                "SET status = :status, started_at = :now, "
-                "agent_instance_id = :agent_id, attempt = attempt + 1 "
-                "WHERE job_id = ("
-                "  SELECT job_id FROM jobs "
-                "  WHERE status = :pending AND data_source = :data_source "
-                '  ORDER BY "order" ASC LIMIT 1'
-                ") "
-                "RETURNING job_id"
-            ),
-            {
-                "status": JobStatus.IN_PROGRESS.value,
-                "now": now,
-                "agent_id": agent_instance_id,
-                "pending": JobStatus.PENDING.value,
-                "data_source": data_source,
-            },
-        )
-    else:
-        result = session.execute(
-            text(
-                "UPDATE jobs "
-                "SET status = :status, started_at = :now, "
-                "agent_instance_id = :agent_id, attempt = attempt + 1 "
-                "WHERE job_id = ("
-                "  SELECT job_id FROM jobs "
-                "  WHERE status = :pending "
-                '  ORDER BY "order" ASC LIMIT 1'
-                ") "
-                "RETURNING job_id"
-            ),
-            {
-                "status": JobStatus.IN_PROGRESS.value,
-                "now": now,
-                "agent_id": agent_instance_id,
-                "pending": JobStatus.PENDING.value,
-            },
-        )
+    result = session.execute(
+        text(
+            "UPDATE jobs "
+            "SET status = :status, started_at = :now, "
+            "agent_instance_id = :agent_id, attempt = attempt + 1 "
+            "WHERE job_id = ("
+            "  SELECT job_id FROM jobs "
+            "  WHERE status = :pending "
+            '  ORDER BY "order" ASC LIMIT 1'
+            ") "
+            "RETURNING job_id"
+        ),
+        {
+            "status": JobStatus.IN_PROGRESS.value,
+            "now": now,
+            "agent_id": agent_instance_id,
+            "pending": JobStatus.PENDING.value,
+        },
+    )
 
     row = result.fetchone()
     if row is None:

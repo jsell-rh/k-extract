@@ -1,9 +1,8 @@
 """Pipeline orchestrator for `k-extract run`.
 
 Coordinates the end-to-end extraction flow: config loading, fingerprinting,
-resume logic, job generation, DEFINE emission, worker launch, and summary
-reporting. Data sources are processed sequentially to ensure cross-source
-entity visibility.
+resume logic, upfront job generation across all data sources, DEFINE
+emission, global worker launch, and summary reporting.
 """
 
 from __future__ import annotations
@@ -139,8 +138,8 @@ async def run_pipeline(
     """Execute the extraction pipeline.
 
     Loads config, computes fingerprint, handles resume logic, generates
-    jobs, emits DEFINEs, launches workers per data source, and reports
-    results.
+    all jobs upfront, emits DEFINEs, launches workers with a global
+    queue, and reports results.
 
     Args:
         config_path: Path to extraction.yaml.
@@ -344,14 +343,7 @@ async def run_pipeline(
     if console is not None:
         console.print("[green]✓[/green] Pipeline setup complete")
 
-    # 12. Process data sources in configured order
-    jobs_processed_total = 0
-    cumulative_cost = 0.0
-    all_failed_details: list[tuple[str, str]] = []
-    total_completed = 0
-    total_failed = 0
-    total_jobs = 0
-
+    # 12. Generate all jobs upfront (before any worker launches)
     # Estimate prompt overhead from actual prompt content (no magic numbers)
     prompt_overhead = (
         len(config.prompts.system_prompt) + len(config.prompts.job_description_template)
@@ -361,27 +353,37 @@ async def run_pipeline(
         context_window, prompt_overhead, output_reservation, SAFETY_MARGIN
     )
 
-    # Create progress tracker once at pipeline start (persists across data sources)
-    progress: PipelineProgress | None = None
+    # Build source_paths mapping: data source name → filesystem path
+    source_paths: dict[str, Path] = {
+        ds.name: Path(ds.path) for ds in config.data_sources
+    }
+
+    # Show spinner during upfront job generation
+    job_gen_live: Live | None = None
+    job_gen_spinner: Spinner | None = None
+
+    def _job_gen_status(msg: str) -> None:
+        if job_gen_spinner is not None and job_gen_live is not None:
+            job_gen_spinner.update(text=msg)
+            job_gen_live.update(job_gen_spinner)
+
     if console is not None:
-        progress = PipelineProgress(workers)
+        job_gen_spinner = Spinner("dots", text="Generating jobs...")
+        job_gen_live = Live(
+            job_gen_spinner,
+            console=console,
+            transient=True,
+        )
+        job_gen_live.start()
 
-    for ds in config.data_sources:
-        ds_path = Path(ds.path)
-        log.info("pipeline.processing_source", data_source=ds.name)
+    try:
+        num_sources = len(config.data_sources)
+        for i, ds in enumerate(config.data_sources, 1):
+            ds_path = Path(ds.path)
+            _job_gen_status(f"Generating jobs for {ds.name} ({i}/{num_sources})...")
+            log.info("pipeline.generating_jobs", data_source=ds.name)
 
-        # Show spinner during job generation (part of setup phase)
-        job_gen_live: Live | None = None
-        if console is not None:
-            job_gen_live = Live(
-                Spinner("dots", text=f"Generating jobs for {ds.name}..."),
-                console=console,
-                transient=True,
-            )
-            job_gen_live.start()
-
-        try:
-            # Generate jobs for this source if fresh start or no jobs exist
+            # Generate jobs for this source if no jobs exist yet
             with session_factory() as session:
                 existing_count = session.execute(
                     sa_text("SELECT COUNT(*) FROM jobs WHERE data_source = :ds"),
@@ -413,168 +415,142 @@ async def run_pipeline(
                     data_source=ds.name,
                     count=len(jobs),
                 )
-        finally:
-            if job_gen_live is not None:
-                job_gen_live.stop()
+    finally:
+        if job_gen_live is not None:
+            job_gen_live.stop()
 
-        # Count total and pending jobs for this source
-        with session_factory() as session:
-            source_total = (
-                session.execute(
-                    sa_text("SELECT COUNT(*) FROM jobs WHERE data_source = :ds"),
-                    {"ds": ds.name},
-                ).scalar()
-                or 0
-            )
-            source_pending = (
-                session.execute(
-                    sa_text(
-                        "SELECT COUNT(*) FROM jobs "
-                        "WHERE data_source = :ds AND status = :status"
-                    ),
-                    {"ds": ds.name, "status": JobStatus.PENDING.value},
-                ).scalar()
-                or 0
-            )
+    # 13. Count global totals across all sources
+    with session_factory() as session:
+        total_jobs = session.execute(sa_text("SELECT COUNT(*) FROM jobs")).scalar() or 0
+        total_pending = (
+            session.execute(
+                sa_text("SELECT COUNT(*) FROM jobs WHERE status = :status"),
+                {"status": JobStatus.PENDING.value},
+            ).scalar()
+            or 0
+        )
+        total_completed = (
+            session.execute(
+                sa_text("SELECT COUNT(*) FROM jobs WHERE status = :status"),
+                {"status": JobStatus.COMPLETED.value},
+            ).scalar()
+            or 0
+        )
+        total_failed = (
+            session.execute(
+                sa_text("SELECT COUNT(*) FROM jobs WHERE status = :status"),
+                {"status": JobStatus.FAILED.value},
+            ).scalar()
+            or 0
+        )
 
-        total_jobs += source_total
+    if console is not None:
+        console.print(
+            f"[green]✓[/green] Jobs ready: {total_jobs} total, {total_pending} pending"
+        )
 
-        # Count already-completed and already-failed jobs from prior runs
-        with session_factory() as session:
-            already_completed = (
-                session.execute(
-                    sa_text(
-                        "SELECT COUNT(*) FROM jobs "
-                        "WHERE data_source = :ds AND status = :status"
-                    ),
-                    {"ds": ds.name, "status": JobStatus.COMPLETED.value},
-                ).scalar()
-                or 0
-            )
-            already_failed = (
-                session.execute(
-                    sa_text(
-                        "SELECT COUNT(*) FROM jobs "
-                        "WHERE data_source = :ds AND status = :status"
-                    ),
-                    {"ds": ds.name, "status": JobStatus.FAILED.value},
-                ).scalar()
-                or 0
-            )
-        total_completed += already_completed
-        total_failed += already_failed
+    if total_pending == 0:
+        log.info("pipeline.no_pending_jobs")
+        result.total_jobs = total_jobs
+        result.completed_jobs = total_completed
+        result.failed_jobs = total_failed
+        result.output_lines = _count_output_lines(output_path)
+        return result
 
-        if source_pending == 0:
-            log.info("pipeline.source_complete", data_source=ds.name)
-            continue
+    # 14. Launch workers once with global queue
+    cumulative_cost = 0.0
+    all_failed_details: list[tuple[str, str]] = []
 
-        # Compute remaining max_jobs budget for this source
-        source_max: int | None = None
-        if max_jobs is not None:
-            remaining = max_jobs - jobs_processed_total
-            if remaining <= 0:
-                log.info("pipeline.max_jobs_reached", max_jobs=max_jobs)
-                break
-            source_max = remaining
+    # Shared counter for global max_jobs enforcement across workers
+    shared_counter: list[int] | None = None
+    if max_jobs is not None:
+        shared_counter = [0]
 
-        # Launch workers for this source
-        # Shared counter for global max_jobs enforcement across workers
-        shared_counter: list[int] | None = None
-        if source_max is not None:
-            shared_counter = [0]
+    worker_count = min(workers, total_pending)
 
-        worker_count = min(workers, source_pending)
+    # Create progress tracker at pipeline start
+    progress: PipelineProgress | None = None
+    live: Live | None = None
+    if console is not None:
+        progress = PipelineProgress(workers)
+        progress.set_data_source("k-extract", total_jobs, total_pending)
+        live = Live(
+            render_dashboard(progress),
+            console=console,
+            refresh_per_second=2,
+            transient=True,
+        )
+        live.start()
 
-        # Update progress tracker for this data source and start live dashboard
-        live: Live | None = None
-        if console is not None and progress is not None:
-            progress.set_data_source(ds.name, source_total, source_pending)
-            live = Live(
-                render_dashboard(progress),
-                console=console,
-                refresh_per_second=2,
-                transient=True,
-            )
-            live.start()
-
-        try:
-            worker_tasks = []
-            for i in range(worker_count):
-                worker_id = f"{i + 1:02d}"
-                worker_tasks.append(
-                    worker_loop(
-                        worker_id=worker_id,
-                        store=store,
-                        ontology=ontology,
-                        session_factory=session_factory,
-                        config=config,
-                        writer=writer,
-                        data_source=ds.name,
-                        source_path=ds_path,
-                        conversation_log_dir=conversation_log_dir,
-                        max_jobs=source_max,
-                        shared_counter=shared_counter,
-                        model_id=settings.model_id,
-                        progress=progress,
-                    )
+    try:
+        worker_tasks = []
+        for i in range(worker_count):
+            worker_id = f"{i + 1:02d}"
+            worker_tasks.append(
+                worker_loop(
+                    worker_id=worker_id,
+                    store=store,
+                    ontology=ontology,
+                    session_factory=session_factory,
+                    config=config,
+                    writer=writer,
+                    source_paths=source_paths,
+                    conversation_log_dir=conversation_log_dir,
+                    max_jobs=max_jobs,
+                    shared_counter=shared_counter,
+                    model_id=settings.model_id,
+                    progress=progress,
                 )
+            )
 
-            if live is not None:
-                assert progress is not None
+        if live is not None:
+            assert progress is not None
 
-                async def _refresh(lv: Live, pg: PipelineProgress) -> None:
-                    while True:
-                        await asyncio.sleep(0.5)
-                        lv.update(render_dashboard(pg))
+            async def _refresh(lv: Live, pg: PipelineProgress) -> None:
+                while True:
+                    await asyncio.sleep(0.5)
+                    lv.update(render_dashboard(pg))
 
-                refresh_task = asyncio.create_task(_refresh(live, progress))
-                try:
-                    gather_results = await asyncio.gather(
-                        *worker_tasks, return_exceptions=True
-                    )
-                finally:
-                    refresh_task.cancel()
-                    with contextlib.suppress(asyncio.CancelledError):
-                        await refresh_task
-                # Final update before stopping
-                live.update(render_dashboard(progress))  # type: ignore[arg-type]
-                # Print final state as static output for scrollback
-                console.print(render_dashboard(progress))  # type: ignore[arg-type]
-            else:
+            refresh_task = asyncio.create_task(_refresh(live, progress))
+            try:
                 gather_results = await asyncio.gather(
                     *worker_tasks, return_exceptions=True
                 )
-        finally:
-            if live is not None:
-                live.stop()
+            finally:
+                refresh_task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await refresh_task
+            # Final update before stopping
+            live.update(render_dashboard(progress))  # type: ignore[arg-type]
+            # Print final state as static output for scrollback
+            console.print(render_dashboard(progress))  # type: ignore[arg-type]
+        else:
+            gather_results = await asyncio.gather(*worker_tasks, return_exceptions=True)
+    finally:
+        if live is not None:
+            live.stop()
 
-        # Aggregate worker results, handling any unhandled exceptions
-        worker_results: list[WorkerResult] = []
-        for gr in gather_results:
-            if isinstance(gr, BaseException):
-                log.error(
-                    "pipeline.worker_crashed",
-                    error=str(gr),
-                    data_source=ds.name,
-                )
-                continue
-            worker_results.append(gr)
+    # Aggregate worker results, handling any unhandled exceptions
+    worker_results: list[WorkerResult] = []
+    for gr in gather_results:
+        if isinstance(gr, BaseException):
+            log.error("pipeline.worker_crashed", error=str(gr))
+            continue
+        worker_results.append(gr)
 
-        for wr in worker_results:
-            jobs_processed_total += wr.jobs_processed
-            total_completed += wr.jobs_succeeded
-            total_failed += wr.jobs_failed
-            cumulative_cost += wr.cumulative_usage.cost_usd
-            all_failed_details.extend(wr.failed_job_details)
+    for wr in worker_results:
+        total_completed += wr.jobs_succeeded
+        total_failed += wr.jobs_failed
+        cumulative_cost += wr.cumulative_usage.cost_usd
+        all_failed_details.extend(wr.failed_job_details)
 
-        log.info(
-            "pipeline.source_done",
-            data_source=ds.name,
-            completed=sum(wr.jobs_succeeded for wr in worker_results),
-            failed=sum(wr.jobs_failed for wr in worker_results),
-        )
+    log.info(
+        "pipeline.extraction_done",
+        completed=sum(wr.jobs_succeeded for wr in worker_results),
+        failed=sum(wr.jobs_failed for wr in worker_results),
+    )
 
-    # 13. Build final result
+    # 15. Build final result
     result.total_jobs = total_jobs
     result.completed_jobs = total_completed
     result.failed_jobs = total_failed
