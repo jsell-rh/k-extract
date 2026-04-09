@@ -1,8 +1,8 @@
 # Task 018: End-to-End Integration Test (No Mocking)
 
-**Status:** `not-started`
+**Status:** `in-progress`
 **Spec Reference:** specs/process/extraction-pipeline.md, specs/process/output-format.md, specs/agent/agent-architecture.md
-**Branch:** (none)
+**Branch:** task-018
 **PR:** (none)
 **Review:** (none)
 
