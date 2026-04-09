@@ -1,10 +1,10 @@
 # Task 012: Extraction Pipeline — `k-extract run` Orchestrator and Workers
 
-**Status:** `ready-for-review`
+**Status:** `needs-revision`
 **Spec Reference:** specs/process/extraction-pipeline.md, specs/concurrency/concurrency-model.md
 **Branch:** task-012
 **PR:** #12
-**Review:** (none)
+**Review:** specs/reviews/task-012.md
 
 ## Description
 
