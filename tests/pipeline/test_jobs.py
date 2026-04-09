@@ -24,6 +24,7 @@ from k_extract.pipeline.jobs import (
     mark_failed,
     reset_all_in_progress,
     reset_failed_jobs,
+    reset_job,
     reset_stale_jobs,
 )
 
@@ -517,6 +518,90 @@ class TestResetAllInProgress:
 
         count = reset_all_in_progress(session)
         assert count == 0
+
+
+class TestResetJob:
+    def test_reset_failed_job(self, session: Session) -> None:
+        now = datetime.now(UTC)
+        _insert_job(
+            session,
+            "job-1",
+            status=JobStatus.FAILED,
+            started_at=now,
+            completed_at=now,
+            agent_instance_id="worker-1",
+            attempt=3,
+            error_message="Something broke",
+        )
+
+        previous = reset_job(session, "job-1")
+        assert previous == JobStatus.FAILED
+
+        session.expire_all()
+        job = session.get(Job, "job-1")
+        assert job is not None
+        assert job.status == JobStatus.PENDING
+        assert job.started_at is None
+        assert job.completed_at is None
+        assert job.error_message is None
+        assert job.agent_instance_id is None
+        assert job.attempt == 3  # Preserved
+
+    def test_reset_in_progress_job(self, session: Session) -> None:
+        now = datetime.now(UTC)
+        _insert_job(
+            session,
+            "job-1",
+            status=JobStatus.IN_PROGRESS,
+            started_at=now,
+            agent_instance_id="worker-1",
+            attempt=1,
+        )
+
+        previous = reset_job(session, "job-1")
+        assert previous == JobStatus.IN_PROGRESS
+
+        session.expire_all()
+        job = session.get(Job, "job-1")
+        assert job is not None
+        assert job.status == JobStatus.PENDING
+        assert job.started_at is None
+        assert job.agent_instance_id is None
+
+    def test_reset_completed_job(self, session: Session) -> None:
+        now = datetime.now(UTC)
+        _insert_job(
+            session,
+            "job-1",
+            status=JobStatus.COMPLETED,
+            started_at=now,
+            completed_at=now,
+            agent_instance_id="worker-1",
+            attempt=1,
+        )
+
+        previous = reset_job(session, "job-1")
+        assert previous == JobStatus.COMPLETED
+
+    def test_reset_nonexistent_job(self, session: Session) -> None:
+        with pytest.raises(ValueError, match="Job not found"):
+            reset_job(session, "nonexistent")
+
+    def test_reset_preserves_attempt(self, session: Session) -> None:
+        _insert_job(
+            session,
+            "job-1",
+            status=JobStatus.FAILED,
+            attempt=5,
+            error_message="err",
+        )
+
+        reset_job(session, "job-1")
+
+        session.expire_all()
+        job = session.get(Job, "job-1")
+        assert job is not None
+        assert job.attempt == 5
 
 
 class TestResetFailedJobs:

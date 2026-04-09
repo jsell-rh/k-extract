@@ -1,9 +1,9 @@
 # Task 014: CLI Job Reset Command
 
-**Status:** `not-started`
+**Status:** `complete`
 **Spec Reference:** specs/concurrency/concurrency-model.md (Section 6: Stale Lock / Stale Job Detection and Recovery)
-**Branch:** (none)
-**PR:** (none)
+**Branch:** task-014
+**PR:** #14
 **Review:** (none)
 
 ## Description
@@ -48,4 +48,5 @@ Reference: specs/concurrency/concurrency-model.md section 6 — "The new system 
 
 ## Relevant Commits
 
-(none yet)
+- `f61929a` — feat(task-014): add --reset and --reset-failed CLI options
+- Merged via PR #14

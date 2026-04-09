@@ -279,6 +279,29 @@ def reset_failed_jobs(session: Session) -> int:
     return result.rowcount
 
 
+def reset_job(session: Session, job_id: str) -> str:
+    """Reset a specific job to pending by ID.
+
+    Clears started_at, completed_at, error_message, and agent_instance_id.
+    Preserves attempt counter.
+
+    Returns the previous status of the job.
+    Raises ValueError if job_id not found.
+    """
+    job = session.get(Job, job_id)
+    if job is None:
+        msg = f"Job not found: {job_id!r}"
+        raise ValueError(msg)
+    previous_status = job.status
+    job.status = JobStatus.PENDING
+    job.started_at = None
+    job.completed_at = None
+    job.error_message = None
+    job.agent_instance_id = None
+    session.commit()
+    return previous_status
+
+
 def reset_all_in_progress(session: Session) -> int:
     """Reset all in_progress jobs to pending (startup reset).
 
