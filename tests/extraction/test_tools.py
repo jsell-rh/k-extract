@@ -948,7 +948,7 @@ class TestManageEntityCreate:
         assert data["entity"]["properties"]["title"] == "New Item"
 
     @pytest.mark.asyncio
-    async def test_create_rejects_duplicate_in_shared(self, manage_entity_fn, store):
+    async def test_create_returns_existing_from_shared(self, manage_entity_fn, store):
         _seed_products(store, 1)
         result = await manage_entity_fn.handler(
             {
@@ -961,11 +961,14 @@ class TestManageEntityCreate:
                 "mode": "create",
             }
         )
-        is_error, _ = _parse_result(result)
-        assert is_error
+        is_error, data = _parse_result(result)
+        assert not is_error
+        assert data["status"] == "already_exists"
+        assert data["entity"]["slug"] == "product:item-0"
+        assert data["entity"]["entity_type"] == "Product"
 
     @pytest.mark.asyncio
-    async def test_create_rejects_duplicate_in_staging(self, manage_entity_fn):
+    async def test_create_returns_existing_from_staging(self, manage_entity_fn):
         # Create first
         await manage_entity_fn.handler(
             {
@@ -990,8 +993,11 @@ class TestManageEntityCreate:
                 "mode": "create",
             }
         )
-        is_error, _ = _parse_result(result)
-        assert is_error
+        is_error, data = _parse_result(result)
+        assert not is_error
+        assert data["status"] == "already_exists"
+        assert data["entity"]["slug"] == "product:staged-item"
+        assert data["entity"]["properties"]["title"] == "Staged"
 
     @pytest.mark.asyncio
     async def test_create_validates_slug_format(self, manage_entity_fn):
@@ -1222,7 +1228,7 @@ class TestManageRelationshipCreate:
         assert data["relationship"]["target_entity_type"] == "Product"
 
     @pytest.mark.asyncio
-    async def test_reject_duplicate(self, manage_relationship_fn, store):
+    async def test_returns_existing_on_duplicate(self, manage_relationship_fn, store):
         _seed_products(store, 2)
         # Create first
         await manage_relationship_fn.handler(
@@ -1231,6 +1237,7 @@ class TestManageRelationshipCreate:
                 "source_slug": "product:item-0",
                 "target_slug": "product:item-1",
                 "mode": "create",
+                "properties": {"context": "original"},
             }
         )
         # Try again
@@ -1242,8 +1249,12 @@ class TestManageRelationshipCreate:
                 "mode": "create",
             }
         )
-        is_error, _ = _parse_result(result)
-        assert is_error
+        is_error, data = _parse_result(result)
+        assert not is_error
+        assert data["status"] == "already_exists"
+        assert data["relationship"]["source_slug"] == "product:item-0"
+        assert data["relationship"]["target_slug"] == "product:item-1"
+        assert data["relationship"]["composite_key"] == "Product|REFERENCES|Product"
 
     @pytest.mark.asyncio
     async def test_source_not_found(self, manage_relationship_fn, store):

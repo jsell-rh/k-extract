@@ -447,11 +447,17 @@ def create_extraction_tools(
                         return _err(f"Invalid tag {tag!r}. Allowed: {sorted(allowed)}.")
 
         if mode == "create":
-            # Validate entity DOES NOT already exist (shared + staged)
+            # Check if entity already exists (shared + staged)
             existing = store.get_entity_by_slug(slug, worker_id=worker_id)
             if existing is not None:
-                return _err(
-                    f"Entity already exists: {slug!r}. Use mode='edit' to modify."
+                return _ok(
+                    json.dumps(
+                        {
+                            "status": "already_exists",
+                            "entity": _entity_to_dict(existing, ontology),
+                        },
+                        indent=2,
+                    )
                 )
 
             # Validate required properties are present
@@ -574,10 +580,14 @@ def create_extraction_tools(
             )
             for r in existing_rels:
                 if r.source_slug == source_slug and r.target_slug == target_slug:
-                    return _err(
-                        f"Relationship already exists: {composite_key!r} "
-                        f"from {source_slug!r} to {target_slug!r}. "
-                        f"Use mode='edit' to modify."
+                    return _ok(
+                        json.dumps(
+                            {
+                                "status": "already_exists",
+                                "relationship": _relationship_to_dict(r),
+                            },
+                            indent=2,
+                        )
                     )
 
             rel = RelationshipInstance(
