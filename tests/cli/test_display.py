@@ -28,6 +28,15 @@ class TestSpinner:
 
 
 class TestStreamThinking:
+    def teardown_method(self) -> None:
+        """Clean up any active Live display after each test."""
+        from k_extract.cli import display
+
+        if display._active_live is not None:
+            display._active_live.stop()
+            display._active_live = None
+            display._spinner_message = None
+
     def test_truncates_to_given_width(self) -> None:
         """Long text is truncated to the specified width."""
         output = StringIO()
@@ -42,12 +51,17 @@ class TestStreamThinking:
     def test_outputs_dim_styled_content(self) -> None:
         """Output uses dim styling."""
         output = StringIO()
-        console = Console(file=output, force_terminal=True, force_interactive=False)
+        console = Console(file=output, force_terminal=True)
         stream_thinking(console, "thinking about entities", width=80)
-        text = output.getvalue()
-        # Dim style produces ANSI dim escape code (SGR 2)
-        assert "\x1b[2m" in text
-        assert "thinking about entities" in text
+        # Verify the Live renderable has dim style applied
+        from rich.text import Text
+
+        from k_extract.cli import display
+
+        renderable = display._active_live._renderable
+        assert isinstance(renderable, Text)
+        assert renderable.style == "dim"
+        assert renderable.plain == "thinking about entities"
 
     def test_empty_text_produces_no_output(self) -> None:
         """Empty or whitespace-only text does not produce output."""
@@ -74,17 +88,41 @@ class TestStreamThinking:
         assert "short" in text
         assert "..." not in text
 
+    def test_overwrites_previous_line(self) -> None:
+        """Multiple calls update the same Live display instead of accumulating."""
+        output = StringIO()
+        console = Console(file=output, force_terminal=True)
+        stream_thinking(console, "first thought", width=80)
+        stream_thinking(console, "second thought", width=80)
+        # The Live renderable should be the latest text, not accumulated
+        from rich.text import Text
+
+        from k_extract.cli import display
+
+        assert display._active_live is not None
+        renderable = display._active_live._renderable
+        assert isinstance(renderable, Text)
+        assert renderable.plain == "second thought"
+
 
 class TestClearThinking:
-    def test_clears_line(self) -> None:
-        """Clear thinking overwrites the line with spaces."""
+    def test_clears_after_stream(self) -> None:
+        """clear_thinking stops the Live display started by stream_thinking."""
         output = StringIO()
         console = Console(file=output, force_terminal=True, width=40)
+        stream_thinking(console, "some thinking text", width=40)
         clear_thinking(console)
-        text = output.getvalue()
-        # Should produce whitespace to overwrite any previous content
-        assert len(text.strip()) == 0
-        assert len(text) >= 40
+        # After clear, the standalone Live should be stopped and removed
+        from k_extract.cli import display
+
+        assert display._active_live is None
+
+    def test_noop_when_no_active_display(self) -> None:
+        """clear_thinking is a no-op when no thinking display is active."""
+        output = StringIO()
+        console = Console(file=output, force_terminal=True, width=40)
+        # Should not raise
+        clear_thinking(console)
 
 
 class TestStreamingLlmCaller:
