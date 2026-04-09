@@ -458,6 +458,184 @@ class TestJobDetail:
         assert "Completed: None" in result.output
 
 
+class TestJobReset:
+    """Tests for --reset (single job) and --reset-failed options."""
+
+    def test_reset_failed_job(self, tmp_path: Path) -> None:
+        db_path = tmp_path / "test.db"
+        config_path = _write_config(tmp_path)
+
+        _create_db_with_jobs(
+            db_path,
+            [
+                _make_job(
+                    "job-fail",
+                    order=0,
+                    status=JobStatus.FAILED,
+                    error_message="Some error",
+                    started_at=datetime(2026, 1, 1, 1, 0, 0, tzinfo=UTC),
+                    completed_at=datetime(2026, 1, 1, 1, 5, 0, tzinfo=UTC),
+                    agent_instance_id="worker-01",
+                    attempt=2,
+                ),
+            ],
+        )
+
+        runner = CliRunner()
+        result = runner.invoke(
+            main, ["jobs", "--config", str(config_path), "--reset", "job-fail"]
+        )
+
+        assert result.exit_code == 0
+        assert "Reset job job-fail: failed -> pending" in result.output
+
+        # Verify the job was actually reset in the database
+        engine = create_engine_with_wal(db_path)
+        sf = create_session_factory(engine)
+        with sf() as session:
+            job = session.get(Job, "job-fail")
+            assert job is not None
+            assert job.status == JobStatus.PENDING
+            assert job.started_at is None
+            assert job.completed_at is None
+            assert job.error_message is None
+            assert job.agent_instance_id is None
+            assert job.attempt == 2  # preserved
+
+    def test_reset_in_progress_job(self, tmp_path: Path) -> None:
+        db_path = tmp_path / "test.db"
+        config_path = _write_config(tmp_path)
+
+        _create_db_with_jobs(
+            db_path,
+            [
+                _make_job(
+                    "job-ip",
+                    order=0,
+                    status=JobStatus.IN_PROGRESS,
+                    started_at=datetime(2026, 1, 1, 1, 0, 0, tzinfo=UTC),
+                    agent_instance_id="worker-02",
+                    attempt=1,
+                ),
+            ],
+        )
+
+        runner = CliRunner()
+        result = runner.invoke(
+            main, ["jobs", "--config", str(config_path), "--reset", "job-ip"]
+        )
+
+        assert result.exit_code == 0
+        assert "Reset job job-ip: in_progress -> pending" in result.output
+
+    def test_reset_job_not_found(self, tmp_path: Path) -> None:
+        db_path = tmp_path / "test.db"
+        config_path = _write_config(tmp_path)
+        _create_db_with_jobs(db_path, [])
+
+        runner = CliRunner()
+        result = runner.invoke(
+            main, ["jobs", "--config", str(config_path), "--reset", "nonexistent"]
+        )
+
+        assert result.exit_code != 0
+        assert "Job not found: nonexistent" in result.output
+
+    def test_reset_failed_flag(self, tmp_path: Path) -> None:
+        db_path = tmp_path / "test.db"
+        config_path = _write_config(tmp_path)
+
+        _create_db_with_jobs(
+            db_path,
+            [
+                _make_job(
+                    "j1",
+                    order=0,
+                    status=JobStatus.FAILED,
+                    error_message="err1",
+                    attempt=1,
+                ),
+                _make_job(
+                    "j2",
+                    order=1,
+                    status=JobStatus.FAILED,
+                    error_message="err2",
+                    attempt=3,
+                ),
+                _make_job("j3", order=2, status=JobStatus.COMPLETED),
+                _make_job("j4", order=3, status=JobStatus.PENDING),
+            ],
+        )
+
+        runner = CliRunner()
+        result = runner.invoke(
+            main, ["jobs", "--config", str(config_path), "--reset-failed"]
+        )
+
+        assert result.exit_code == 0
+        assert "Reset 2 failed job(s) to pending." in result.output
+
+        # Verify only failed jobs were reset
+        engine = create_engine_with_wal(db_path)
+        sf = create_session_factory(engine)
+        with sf() as session:
+            j1 = session.get(Job, "j1")
+            j2 = session.get(Job, "j2")
+            j3 = session.get(Job, "j3")
+            assert j1 is not None and j1.status == JobStatus.PENDING
+            assert j2 is not None and j2.status == JobStatus.PENDING
+            assert j3 is not None and j3.status == JobStatus.COMPLETED
+
+    def test_reset_failed_no_failed_jobs(self, tmp_path: Path) -> None:
+        db_path = tmp_path / "test.db"
+        config_path = _write_config(tmp_path)
+
+        _create_db_with_jobs(
+            db_path,
+            [_make_job("j1", order=0, status=JobStatus.COMPLETED)],
+        )
+
+        runner = CliRunner()
+        result = runner.invoke(
+            main, ["jobs", "--config", str(config_path), "--reset-failed"]
+        )
+
+        assert result.exit_code == 0
+        assert "Reset 0 failed job(s) to pending." in result.output
+
+    def test_reset_preserves_attempt_counter(self, tmp_path: Path) -> None:
+        db_path = tmp_path / "test.db"
+        config_path = _write_config(tmp_path)
+
+        _create_db_with_jobs(
+            db_path,
+            [
+                _make_job(
+                    "job-retry",
+                    order=0,
+                    status=JobStatus.FAILED,
+                    error_message="timeout",
+                    attempt=5,
+                ),
+            ],
+        )
+
+        runner = CliRunner()
+        result = runner.invoke(
+            main, ["jobs", "--config", str(config_path), "--reset", "job-retry"]
+        )
+
+        assert result.exit_code == 0
+
+        engine = create_engine_with_wal(db_path)
+        sf = create_session_factory(engine)
+        with sf() as session:
+            job = session.get(Job, "job-retry")
+            assert job is not None
+            assert job.attempt == 5
+            assert job.status == JobStatus.PENDING
+
+
 class TestJobsErrors:
     """Tests for error handling."""
 

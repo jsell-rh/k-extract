@@ -18,6 +18,7 @@ from k_extract.pipeline.database import (
     create_engine_with_wal,
     create_session_factory,
 )
+from k_extract.pipeline.jobs import reset_failed_jobs, reset_job
 
 
 @click.command()
@@ -52,11 +53,27 @@ from k_extract.pipeline.database import (
     default=None,
     help="Filter by data source name.",
 )
+@click.option(
+    "--reset",
+    "reset_id",
+    type=str,
+    default=None,
+    help="Reset a specific job to pending by job ID.",
+)
+@click.option(
+    "--reset-failed",
+    "reset_failed",
+    is_flag=True,
+    default=False,
+    help="Reset all failed jobs to pending.",
+)
 def jobs(
     config_path: Path,
     status_filter: str | None,
     job_id: str | None,
     data_source: str | None,
+    reset_id: str | None,
+    reset_failed: bool,
 ) -> None:
     """Inspect extraction job state."""
     config = load_config(config_path)
@@ -71,12 +88,31 @@ def jobs(
     session_factory = create_session_factory(engine)
 
     with session_factory() as session:
-        if job_id is not None:
+        if reset_id is not None:
+            _reset_single_job(session, reset_id)
+        elif reset_failed:
+            _reset_all_failed(session)
+        elif job_id is not None:
             _show_job_detail(session, job_id)
         elif status_filter is not None or data_source is not None:
             _show_filtered_listing(session, status_filter, data_source)
         else:
             _show_summary(session)
+
+
+def _reset_single_job(session: Session, job_id: str) -> None:
+    """Reset a specific job to pending."""
+    try:
+        previous_status = reset_job(session, job_id)
+    except ValueError:
+        raise click.ClickException(f"Job not found: {job_id}") from None
+    click.echo(f"Reset job {job_id}: {previous_status} -> pending")
+
+
+def _reset_all_failed(session: Session) -> None:
+    """Reset all failed jobs to pending."""
+    count = reset_failed_jobs(session)
+    click.echo(f"Reset {count} failed job(s) to pending.")
 
 
 def _show_summary(session: Session) -> None:
