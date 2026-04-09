@@ -12,6 +12,8 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
 
+import pathspec
+
 
 @dataclass
 class DiscoveredFile:
@@ -125,8 +127,24 @@ def _detect_patterns(root: Path, files: list[DiscoveredFile]) -> list[str]:
     return patterns
 
 
+def _load_gitignore_spec(root: Path) -> pathspec.PathSpec | None:
+    """Load .gitignore patterns from the data source root, if present.
+
+    Returns None if no .gitignore file exists.
+    """
+    gitignore_path = root / ".gitignore"
+    if not gitignore_path.is_file():
+        return None
+    text = gitignore_path.read_text(encoding="utf-8", errors="replace")
+    return pathspec.PathSpec.from_lines("gitignore", text.splitlines())
+
+
 def discover_files(source_path: str | Path) -> list[DiscoveredFile]:
     """Recursively scan a data source path and collect file metadata.
+
+    Files matched by `.gitignore` (if present at the data source root)
+    are excluded. Hidden files and directories (dotfiles/dotdirs) are
+    always excluded.
 
     Args:
         source_path: Root path to scan.
@@ -140,6 +158,8 @@ def discover_files(source_path: str | Path) -> list[DiscoveredFile]:
         msg = f"Data source path is not a directory: {root}"
         raise ValueError(msg)
 
+    gitignore_spec = _load_gitignore_spec(root)
+
     files: list[DiscoveredFile] = []
     for file_path in sorted(root.rglob("*")):
         if not file_path.is_file():
@@ -149,6 +169,9 @@ def discover_files(source_path: str | Path) -> list[DiscoveredFile]:
         if any(part.startswith(".") for part in rel_path.parts):
             continue
         rel_str = str(rel_path)
+        # Skip files matching .gitignore patterns
+        if gitignore_spec is not None and gitignore_spec.match_file(rel_str):
+            continue
         size = file_path.stat().st_size
         char_count = _count_chars(file_path)
         file_type = _get_file_type(rel_str)
