@@ -23,6 +23,7 @@ from k_extract.pipeline.jobs import (
     mark_completed,
     mark_failed,
     reset_all_in_progress,
+    reset_failed_jobs,
     reset_stale_jobs,
 )
 
@@ -515,4 +516,57 @@ class TestResetAllInProgress:
         )
 
         count = reset_all_in_progress(session)
+        assert count == 0
+
+
+class TestResetFailedJobs:
+    def test_reset_failed(self, session: Session) -> None:
+        now = datetime.now(UTC)
+        for i in range(2):
+            _insert_job(
+                session,
+                f"failed-{i}",
+                order=i,
+                status=JobStatus.FAILED,
+                completed_at=now,
+                attempt=2,
+                error_message=f"Error {i}",
+            )
+
+        count = reset_failed_jobs(session)
+        assert count == 2
+
+        session.expire_all()
+        for i in range(2):
+            job = session.get(Job, f"failed-{i}")
+            assert job is not None
+            assert job.status == JobStatus.PENDING
+            assert job.started_at is None
+            assert job.completed_at is None
+            assert job.error_message is None
+            assert job.agent_instance_id is None
+            assert job.attempt == 2  # Preserved
+
+    def test_does_not_affect_other_statuses(self, session: Session) -> None:
+        now = datetime.now(UTC)
+        _insert_job(session, "pending-job", order=0)
+        _insert_job(
+            session,
+            "completed-job",
+            order=1,
+            status=JobStatus.COMPLETED,
+            completed_at=now,
+            attempt=1,
+        )
+        _insert_job(
+            session,
+            "ip-job",
+            order=2,
+            status=JobStatus.IN_PROGRESS,
+            started_at=now,
+            agent_instance_id="w1",
+            attempt=1,
+        )
+
+        count = reset_failed_jobs(session)
         assert count == 0

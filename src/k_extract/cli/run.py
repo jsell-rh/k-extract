@@ -1,0 +1,106 @@
+"""CLI command for `k-extract run`.
+
+Executes the extraction pipeline: loads config, processes data sources,
+runs agent workers, and produces JSONL output.
+"""
+
+from __future__ import annotations
+
+import asyncio
+from pathlib import Path
+
+import click
+
+from k_extract.extraction.logging import configure_logging
+
+
+@click.command()
+@click.option(
+    "--config",
+    "config_path",
+    required=True,
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    help="Path to extraction.yaml config file.",
+)
+@click.option(
+    "--workers",
+    default=3,
+    type=int,
+    show_default=True,
+    help="Number of concurrent worker instances.",
+)
+@click.option(
+    "--max-jobs",
+    default=None,
+    type=int,
+    help="Cap on total jobs to process.",
+)
+@click.option(
+    "--force",
+    is_flag=True,
+    default=False,
+    help="Discard previous state and start fresh.",
+)
+@click.option(
+    "--log-conversations",
+    is_flag=True,
+    default=False,
+    help="Enable agent conversation logging to JSONL.",
+)
+@click.option(
+    "--db",
+    "db_path",
+    default=None,
+    type=str,
+    help="Override database path from config.",
+)
+def run(
+    config_path: Path,
+    workers: int,
+    max_jobs: int | None,
+    force: bool,
+    log_conversations: bool,
+    db_path: str | None,
+) -> None:
+    """Execute the extraction pipeline."""
+    configure_logging()
+
+    from k_extract.pipeline.orchestrator import run_pipeline
+
+    try:
+        result = asyncio.run(
+            run_pipeline(
+                config_path=config_path,
+                workers=workers,
+                max_jobs=max_jobs,
+                force=force,
+                log_conversations=log_conversations,
+                db_path=db_path,
+            )
+        )
+    except SystemExit as e:
+        raise click.ClickException(str(e)) from None
+
+    # Print completion summary
+    click.echo("")
+    if result.failed_jobs == 0:
+        click.echo(
+            f"Extraction complete. {result.completed_jobs}/{result.total_jobs} "
+            f"jobs completed."
+        )
+    else:
+        click.echo(
+            f"Extraction complete. {result.completed_jobs}/{result.total_jobs} "
+            f"jobs completed, {result.failed_jobs} failed."
+        )
+
+    click.echo(f"Output: {result.output_file} ({result.output_lines} lines)")
+    click.echo(f"Total cost: ${result.total_cost:.2f}")
+
+    if result.failed_job_details:
+        click.echo("")
+        click.echo("Failed jobs:")
+        for job_id, error in result.failed_job_details:
+            click.echo(f"  {job_id}: {error}")
+        click.echo("")
+        click.echo("Re-run to retry failed jobs.")

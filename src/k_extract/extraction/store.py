@@ -79,6 +79,9 @@ class OntologyStore:
         self._ontology = ontology
         OntologyBase.metadata.create_all(engine)
         self._session_factory = sessionmaker(bind=engine)
+        self._last_committed: dict[
+            str, tuple[list[EntityInstance], list[RelationshipInstance]]
+        ] = {}
 
     # ------------------------------------------------------------------ #
     # Shared store: Entity operations
@@ -273,6 +276,16 @@ class OntologyStore:
             ]
             total = len(matches)
             return matches[:limit], total
+
+    def pop_committed(
+        self, worker_id: str
+    ) -> tuple[list[EntityInstance], list[RelationshipInstance]]:
+        """Retrieve and clear the last committed entities/relationships for a worker.
+
+        Called by the worker after a successful agent run to get the data
+        needed for CREATE operation emission.
+        """
+        return self._last_committed.pop(worker_id, ([], []))
 
     # ------------------------------------------------------------------ #
     # Staging operations
@@ -552,6 +565,15 @@ class OntologyStore:
                 )
 
                 conn.execute(text("COMMIT"))
+
+                # Track committed data for CREATE operation emission
+                committed_entities = [merged_entities[slug] for slug in staged_slugs]
+                committed_rels = [rel_map[key] for key in staged_rel_keys]
+                self._last_committed[worker_id] = (
+                    committed_entities,
+                    committed_rels,
+                )
+
                 return []
             except Exception:
                 conn.execute(text("ROLLBACK"))

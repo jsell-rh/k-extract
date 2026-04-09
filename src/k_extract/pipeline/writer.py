@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import threading
+from collections.abc import Sequence
 from pathlib import Path
 
 from k_extract.domain.mutations import MutationOperation
@@ -40,7 +41,7 @@ class JsonlWriter:
         with self._lock, self._path.open("a") as f:
             f.write(line + "\n")
 
-    async def write_operations(self, operations: list[MutationOperation]) -> None:
+    async def write_operations(self, operations: Sequence[MutationOperation]) -> None:
         """Write multiple operations as consecutive JSON lines.
 
         All operations in a single batch are written under one lock

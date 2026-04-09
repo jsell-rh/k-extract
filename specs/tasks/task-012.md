@@ -1,10 +1,10 @@
 # Task 012: Extraction Pipeline — `k-extract run` Orchestrator and Workers
 
-**Status:** `not-started`
+**Status:** `complete`
 **Spec Reference:** specs/process/extraction-pipeline.md, specs/concurrency/concurrency-model.md
-**Branch:** (none)
-**PR:** (none)
-**Review:** (none)
+**Branch:** task-012
+**PR:** #12
+**Review:** specs/reviews/task-012.md
 
 ## Description
 
@@ -77,4 +77,8 @@ Reference: specs/process/extraction-pipeline.md, specs/concurrency/concurrency-m
 
 ## Relevant Commits
 
-(none yet)
+- `e48d3b5` — feat(task-012): implement k-extract run orchestrator and workers
+- `b857cd8` — fix(task-012): address all review findings from round 1
+- `de94f37` — fix(task-012): address all review findings from round 2
+- `5a9fef6` — fix(task-012): address all review findings from round 3
+- Merged via PR #12
