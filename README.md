@@ -49,7 +49,7 @@ Edit any field, re-run. Changing the config invalidates previous results — use
 
 ## CLI Reference
 
-```
+```bash
 uvx k-extract init <path> [<path> ...]           # Interactive ontology design
 uvx k-extract run --config <yaml>                # Run extraction (resumes by default)
 uvx k-extract run --config <yaml> --force        # Discard previous results, start fresh
