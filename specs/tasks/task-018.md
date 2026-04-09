@@ -1,6 +1,6 @@
 # Task 018: End-to-End Integration Test (No Mocking)
 
-**Status:** `in-progress`
+**Status:** `ready-for-review`
 **Spec Reference:** specs/process/extraction-pipeline.md, specs/process/output-format.md, specs/agent/agent-architecture.md
 **Branch:** task-018
 **PR:** #18
@@ -68,4 +68,5 @@ Existing tests in `tests/pipeline/test_orchestrator.py` mock `discover_model_cap
 
 ## Relevant Commits
 
-(none yet)
+- `37d029e` — chore(task-018): begin implementation
+- `239b12e` — chore(task-018): add PR number
