@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v0.2.1 (2026-04-09)
+
+### Bug Fixes
+
+- **pipeline**: Use .lower() not kebab-case for JSONL ID prefixes
+  ([`5d33462`](https://github.com/jsell-rh/k-extract/commit/5d33462aa9c6a8772a82f217bb2f3dfc37a254a5))
+
+
 ## v0.2.0 (2026-04-09)
 
 ### Features
