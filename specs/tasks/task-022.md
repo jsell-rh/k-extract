@@ -1,9 +1,9 @@
 # Task 022: Fix Deduplication Return Behavior in manage_entity and manage_relationship
 
-**Status:** `not-started`
+**Status:** `complete`
 **Spec Reference:** specs/agent/agent-tools.md, specs/process/output-format.md
-**Branch:** (none)
-**PR:** (none)
+**Branch:** task-022
+**PR:** #22
 **Review:** (none)
 
 ## Description
@@ -56,4 +56,6 @@ Returning `is_error=True` causes agents to treat duplicate detection as a failur
 
 ## Relevant Commits
 
-(none yet)
+- `52d8373` — chore(task-022): begin implementation
+- `2e471a6` — chore(task-022): add PR number
+- Merged via PR #22
