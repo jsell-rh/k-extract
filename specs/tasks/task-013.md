@@ -1,8 +1,8 @@
 # Task 013: CLI Jobs Command — Job Inspection and Error Reporting
 
-**Status:** `not-started`
+**Status:** `in-progress`
 **Spec Reference:** specs/process/extraction-pipeline.md (Job Inspection, User-Facing Error Reporting)
-**Branch:** (none)
+**Branch:** task-013
 **PR:** (none)
 **Review:** (none)
 
