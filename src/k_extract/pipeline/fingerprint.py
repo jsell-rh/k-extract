@@ -9,7 +9,8 @@ from __future__ import annotations
 
 import enum
 import hashlib
-from concurrent.futures import ThreadPoolExecutor
+from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -39,6 +40,7 @@ def hash_file(file_path: str | Path) -> tuple[str, str]:
 def hash_files_parallel(
     file_paths: list[str | Path],
     max_workers: int | None = None,
+    on_progress: Callable[[int, int], None] | None = None,
 ) -> list[tuple[str, str]]:
     """Hash multiple files in parallel using threads.
 
@@ -48,6 +50,8 @@ def hash_files_parallel(
     Args:
         file_paths: List of file paths to hash.
         max_workers: Maximum thread pool size (None = default).
+        on_progress: Optional callback called after each file completes,
+            with (completed_count, total_count).
 
     Returns:
         List of (filepath, hex_digest) tuples, sorted by filepath
@@ -56,8 +60,15 @@ def hash_files_parallel(
     if not file_paths:
         return []
 
+    total = len(file_paths)
+    results: list[tuple[str, str]] = []
+
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        results = list(executor.map(hash_file, file_paths))
+        futures = [executor.submit(hash_file, fp) for fp in file_paths]
+        for i, future in enumerate(as_completed(futures), 1):
+            results.append(future.result())
+            if on_progress is not None:
+                on_progress(i, total)
 
     return sorted(results, key=lambda x: x[0])
 

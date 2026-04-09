@@ -159,11 +159,19 @@ async def run_pipeline(
     result = PipelineResult()
     settings = get_settings()
 
-    # Setup spinner — shows during config loading, fingerprinting, resume eval
+    # Setup spinner — updates text as each sub-step progresses
     setup_live: Live | None = None
+    setup_spinner: Spinner | None = None
+
+    def _setup_status(msg: str) -> None:
+        if setup_spinner is not None and setup_live is not None:
+            setup_spinner.update(text=msg)
+            setup_live.update(setup_spinner)
+
     if console is not None:
+        setup_spinner = Spinner("dots", text="Loading config...")
         setup_live = Live(
-            Spinner("dots", text="Setting up pipeline..."),
+            setup_spinner,
             console=console,
             transient=True,
         )
@@ -180,10 +188,12 @@ async def run_pipeline(
         result.output_file = str(output_path)
 
         # 3. Create database engine and session factory
+        _setup_status("Initializing database...")
         engine = create_engine_with_wal(effective_db_path)
         session_factory = create_session_factory(engine)
 
         # 4. Discover model capabilities (context window, max output tokens)
+        _setup_status("Discovering model capabilities...")
         model_caps = await discover_model_capabilities(model=settings.model_id)
         context_window = model_caps.context_window
         output_reservation = model_caps.max_output_tokens
@@ -198,14 +208,57 @@ async def run_pipeline(
 
         # 6. Compute environment fingerprint
         all_source_files: list[str] = []
-        for ds in config.data_sources:
+        _prev_files = [0]  # mutable container for closure capture
+        num_sources = len(config.data_sources)
+        for i, ds in enumerate(config.data_sources, 1):
             ds_path = Path(ds.path)
             if ds_path.is_dir():
-                files = discover_files(ds_path)
+                base = _prev_files[0]
+
+                def _scan_progress(
+                    found: int,
+                    *,
+                    _ds_name: str = ds.name,
+                    _ds_idx: int = i,
+                    _base: int = base,
+                ) -> None:
+                    if found % 50 == 0:
+                        _setup_status(
+                            f"Scanning {_ds_name}"
+                            f" ({_ds_idx}/{num_sources},"
+                            f" {_base + found} files found)..."
+                        )
+
+                def _metadata_progress(
+                    done: int,
+                    total: int,
+                    *,
+                    _ds_name: str = ds.name,
+                    _ds_idx: int = i,
+                    _base: int = base,
+                ) -> None:
+                    if done % 50 == 0 or done == total:
+                        _setup_status(
+                            f"Reading file metadata ({_ds_name},"
+                            f" {_base + done}/{_base + total})..."
+                        )
+
+                _setup_status(f"Scanning {ds.name} ({i}/{num_sources})...")
+                files = discover_files(
+                    ds_path,
+                    on_progress=_metadata_progress,
+                    on_scan_progress=_scan_progress,
+                )
                 all_source_files.extend(str(ds_path / f.path) for f in files)
+                _prev_files[0] += len(files)
 
         source_file_paths: list[str | Path] = list(all_source_files)
-        file_hashes = hash_files_parallel(source_file_paths)
+
+        def _hash_progress(done: int, total: int) -> None:
+            _setup_status(f"Fingerprinting source files ({done}/{total})...")
+
+        _setup_status("Fingerprinting source files...")
+        file_hashes = hash_files_parallel(source_file_paths, on_progress=_hash_progress)
 
         prompt_templates = (
             config.prompts.system_prompt + config.prompts.job_description_template
@@ -221,6 +274,7 @@ async def run_pipeline(
         )
 
         # 7. Evaluate resume decision
+        _setup_status("Evaluating resume state...")
         with session_factory() as session:
             decision = evaluate_resume(session, current_fingerprint, force=force)
 
@@ -240,6 +294,10 @@ async def run_pipeline(
         store = OntologyStore(ontology_engine, ontology)
 
         # 9. Handle fresh start vs resume
+        if is_fresh:
+            _setup_status("Starting fresh run...")
+        else:
+            _setup_status("Preparing to resume...")
         with session_factory() as session:
             if is_fresh:
                 # Delete all existing jobs
@@ -269,6 +327,7 @@ async def run_pipeline(
             output_path.unlink()
         writer = JsonlWriter(output_path)
         if is_fresh:
+            _setup_status("Emitting type definitions...")
             defines = generate_defines(config.ontology)
             await writer.write_operations(defines)
             log.info("pipeline.defines_emitted", count=len(defines))

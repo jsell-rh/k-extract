@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import os
 from collections import defaultdict
+from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -139,15 +141,41 @@ def _load_gitignore_spec(root: Path) -> pathspec.PathSpec | None:
     return pathspec.PathSpec.from_lines("gitignore", text.splitlines())
 
 
-def discover_files(source_path: str | Path) -> list[DiscoveredFile]:
+def _collect_file_metadata(args: tuple[Path, str]) -> DiscoveredFile:
+    """Collect metadata for a single file (stat + char count).
+
+    Designed to run in a thread pool for parallel I/O.
+    """
+    file_path, rel_str = args
+    size = file_path.stat().st_size
+    char_count = _count_chars(file_path)
+    file_type = _get_file_type(rel_str)
+    return DiscoveredFile(
+        path=rel_str,
+        size=size,
+        char_count=char_count,
+        file_type=file_type,
+    )
+
+
+def discover_files(
+    source_path: str | Path,
+    on_progress: Callable[[int, int], None] | None = None,
+    on_scan_progress: Callable[[int], None] | None = None,
+) -> list[DiscoveredFile]:
     """Recursively scan a data source path and collect file metadata.
 
-    Files matched by `.gitignore` (if present at the data source root)
+    Files matched by ``.gitignore`` (if present at the data source root)
     are excluded. Hidden files and directories (dotfiles/dotdirs) are
-    always excluded.
+    always excluded. Per-file I/O (stat + character counting) is
+    parallelized across threads.
 
     Args:
         source_path: Root path to scan.
+        on_progress: Optional callback ``(done, total)`` fired as files
+            are processed during the metadata-collection phase.
+        on_scan_progress: Optional callback ``(found_so_far)`` fired as
+            candidate files are discovered during the directory walk.
 
     Returns:
         List of DiscoveredFile with path, size, char_count, and file_type.
@@ -160,29 +188,50 @@ def discover_files(source_path: str | Path) -> list[DiscoveredFile]:
 
     gitignore_spec = _load_gitignore_spec(root)
 
-    files: list[DiscoveredFile] = []
-    for file_path in sorted(root.rglob("*")):
-        if not file_path.is_file():
-            continue
-        rel_path = file_path.relative_to(root)
-        # Skip files in hidden directories (e.g. .git/) or hidden files
-        if any(part.startswith(".") for part in rel_path.parts):
-            continue
-        rel_str = str(rel_path)
-        # Skip files matching .gitignore patterns
-        if gitignore_spec is not None and gitignore_spec.match_file(rel_str):
-            continue
-        size = file_path.stat().st_size
-        char_count = _count_chars(file_path)
-        file_type = _get_file_type(rel_str)
-        files.append(
-            DiscoveredFile(
-                path=rel_str,
-                size=size,
-                char_count=char_count,
-                file_type=file_type,
-            )
-        )
+    # Phase 1: Walk the directory tree, pruning hidden/ignored dirs
+    candidates: list[tuple[Path, str]] = []
+    for dirpath, dirnames, filenames in os.walk(root):
+        # Prune hidden directories in-place so os.walk doesn't descend
+        dirnames[:] = [d for d in dirnames if not d.startswith(".")]
+        # Prune gitignored directories
+        if gitignore_spec is not None:
+            rel_dir = os.path.relpath(dirpath, root)
+            dirnames[:] = [
+                d
+                for d in dirnames
+                if not gitignore_spec.match_file(
+                    os.path.join(rel_dir, d) + "/" if rel_dir != "." else d + "/"
+                )
+            ]
+
+        for filename in filenames:
+            if filename.startswith("."):
+                continue
+            full_path = Path(dirpath) / filename
+            rel_str = str(full_path.relative_to(root))
+            if gitignore_spec is not None and gitignore_spec.match_file(rel_str):
+                continue
+            candidates.append((full_path, rel_str))
+            if on_scan_progress is not None:
+                on_scan_progress(len(candidates))
+
+    if not candidates:
+        return []
+
+    # Sort for deterministic ordering after streaming walk
+    candidates.sort(key=lambda c: c[1])
+
+    # Phase 2: Collect per-file metadata in parallel (I/O-bound)
+    total = len(candidates)
+    with ThreadPoolExecutor() as executor:
+        files: list[DiscoveredFile] = []
+        for done, result in enumerate(
+            executor.map(_collect_file_metadata, candidates), 1
+        ):
+            files.append(result)
+            if on_progress is not None:
+                on_progress(done, total)
+
     return files
 
 

@@ -298,6 +298,12 @@ async def run_agent(
                     _handle_user_message(message, conv_logger=conv_logger)
 
                 elif isinstance(message, ResultMessage):
+                    log.info(
+                        "extraction.result_message_raw",
+                        total_cost_usd=message.total_cost_usd,
+                        usage_raw=message.usage,
+                        subtype=message.subtype,
+                    )
                     usage.apply_final(message)
 
                     if conv_logger is not None:
