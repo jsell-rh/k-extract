@@ -1,10 +1,10 @@
 # Task 013: CLI Jobs Command — Job Inspection and Error Reporting
 
-**Status:** `not-started`
+**Status:** `complete`
 **Spec Reference:** specs/process/extraction-pipeline.md (Job Inspection, User-Facing Error Reporting)
-**Branch:** (none)
-**PR:** (none)
-**Review:** (none)
+**Branch:** task-013
+**PR:** #13
+**Review:** specs/reviews/task-013.md
 
 ## Description
 
@@ -53,4 +53,6 @@ Reference: specs/process/extraction-pipeline.md sections on Job Inspection and U
 
 ## Relevant Commits
 
-(none yet)
+- `05f9dd4` — feat(task-013): implement CLI jobs command
+- `e560f26` — fix(task-013): add agent_instance_id to job detail view
+- Merged via PR #13
