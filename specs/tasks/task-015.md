@@ -60,4 +60,4 @@ Reference: specs/agent/agent-tools.md section 3 — the spec describes "Edit-onl
 
 ## Relevant Commits
 
-(none yet)
+- `191e9b9` — feat(task-015): add entity creation mode to manage_entity tool
