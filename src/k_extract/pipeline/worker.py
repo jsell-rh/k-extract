@@ -124,7 +124,12 @@ async def worker_loop(
             store.clear_staging(worker_id)
 
             # Set up agent for this job
-            mcp_server = create_tool_server(worker_id, store, ontology)
+            mcp_server = create_tool_server(
+                worker_id,
+                store,
+                ontology,
+                require_file_completeness=config.require_file_completeness,
+            )
 
             # Build job description via prompt substitution
             file_list = _build_file_list(job.files)

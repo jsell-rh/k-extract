@@ -126,3 +126,4 @@ class ExtractionConfig(BaseModel):
     ontology: OntologyConfig
     prompts: PromptsConfig
     output: OutputConfig
+    require_file_completeness: bool = True

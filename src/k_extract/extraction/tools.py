@@ -132,6 +132,8 @@ def create_extraction_tools(
     worker_id: str,
     store: OntologyStore,
     ontology: Ontology,
+    *,
+    require_file_completeness: bool = True,
 ) -> list[Any]:
     """Create the five extraction tools bound to a specific worker.
 
@@ -648,7 +650,7 @@ def create_extraction_tools(
         ValidateAndCommitInput,
     )
     async def validate_and_commit_tool(args: dict[str, Any]) -> dict[str, Any]:
-        job_files = args.get("job_files")
+        job_files = args.get("job_files") if require_file_completeness else None
 
         errors = store.validate_and_commit(worker_id, job_files=job_files)
         if errors:
@@ -674,12 +676,16 @@ def create_tool_server(
     worker_id: str,
     store: OntologyStore,
     ontology: Ontology,
+    *,
+    require_file_completeness: bool = True,
 ) -> Any:
     """Create an MCP server with extraction tools bound to a worker.
 
     Returns a McpSdkServerConfig for use with ClaudeAgentOptions.mcp_servers.
     """
-    tools = create_extraction_tools(worker_id, store, ontology)
+    tools = create_extraction_tools(
+        worker_id, store, ontology, require_file_completeness=require_file_completeness
+    )
     return create_sdk_mcp_server(
         name="extraction-tools",
         tools=tools,

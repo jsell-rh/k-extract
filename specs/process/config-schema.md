@@ -72,6 +72,9 @@ prompts:
 output:
   file: graph.jsonl        # JSONL output path (appended on resume)
   database: extraction.db  # SQLite database for run state (jobs, fingerprint, etc.)
+
+# Validation — optional flags controlling agent behavior
+require_file_completeness: true  # If false, agents can commit without processing every assigned file
 ```
 
 ## Field Reference
@@ -125,6 +128,11 @@ output:
 - **Fields:**
   - `file` (string, required): Path for the JSONL output file. Appended on resume.
   - `database` (string, optional): Path for the SQLite database storing run state (jobs, environment fingerprint, worker assignments). Defaults to `extraction.db` in the current directory. Can be overridden via `--db` CLI arg.
+
+### `require_file_completeness`
+- **Type:** boolean (optional, default: `true`)
+- **Source:** Set during guided session or manually by the user
+- **Purpose:** Controls whether `validate_and_commit` enforces the job completeness check — i.e., that every file in a job has a corresponding entity with `processed_by_agent=true`. When `false`, agents can commit without processing every assigned file, which is appropriate when many files in a data source are irrelevant to the ontology (e.g., extracting specs from a repo that also contains source code, build artifacts, or vendored dependencies).
 
 ## Editability
 
