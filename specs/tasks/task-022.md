@@ -1,8 +1,8 @@
 # Task 022: Fix Deduplication Return Behavior in manage_entity and manage_relationship
 
-**Status:** `not-started`
+**Status:** `in-progress`
 **Spec Reference:** specs/agent/agent-tools.md, specs/process/output-format.md
-**Branch:** (none)
+**Branch:** task-022
 **PR:** (none)
 **Review:** (none)
 
