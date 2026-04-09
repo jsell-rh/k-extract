@@ -1,10 +1,10 @@
 # Task 024: N+1 Progress Bars (Per-Source + Total)
 
-**Status:** `not-started`
+**Status:** `complete`
 **Spec Reference:** specs/process/extraction-pipeline.md
-**Branch:** (none)
-**PR:** (none)
-**Review:** (none)
+**Branch:** task-024
+**PR:** #24
+**Review:** specs/reviews/task-024.md
 
 ## Description
 
@@ -73,4 +73,4 @@ Since all jobs are generated upfront (Task 023) and workers claim from a global 
 
 ## Relevant Commits
 
-(none yet)
+- `45e4d11` — feat(task-024): n+1 progress bars with per-source tracking

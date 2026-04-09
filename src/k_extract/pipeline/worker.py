@@ -85,6 +85,7 @@ async def worker_loop(
     """
     log = get_logger(worker_id=worker_id)
     result = WorkerResult()
+    current_data_source: str | None = None
 
     try:
         while True:
@@ -109,6 +110,7 @@ async def worker_loop(
 
             # Resolve source path from the job's data_source field
             source_path = source_paths[job.data_source]
+            current_data_source = job.data_source
 
             # Report job claimed to progress tracker
             if progress is not None:
@@ -177,7 +179,7 @@ async def worker_loop(
                 result.jobs_succeeded += 1
                 if progress is not None:
                     job_cost = agent_result.usage.cost_usd or 0.0
-                    progress.record_job_completed(worker_id, job_cost)
+                    progress.record_job_completed(worker_id, job_cost, job.data_source)
                 log.info("extraction.job_completed", job_id=job.job_id)
             else:
                 # Mark job as failed
@@ -186,7 +188,7 @@ async def worker_loop(
                     mark_failed(session, job.job_id, error_msg)
                 result.jobs_failed += 1
                 if progress is not None:
-                    progress.record_job_failed(worker_id)
+                    progress.record_job_failed(worker_id, job.data_source)
                 result.failed_job_details.append((job.job_id, error_msg))
                 log.error(
                     "extraction.job_failed",
@@ -201,10 +203,10 @@ async def worker_loop(
         )
         # If a job was in-flight when the crash occurred, update the
         # progress tracker so dashboard counts remain accurate.
-        if progress is not None:
+        if progress is not None and current_data_source is not None:
             ws = progress.workers.get(worker_id)
             if ws is not None and ws.status == WorkerStatus.PROCESSING:
-                progress.record_job_failed(worker_id)
+                progress.record_job_failed(worker_id, current_data_source)
 
     if progress is not None:
         progress.mark_worker_finished(worker_id)
