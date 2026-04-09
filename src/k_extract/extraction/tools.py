@@ -159,6 +159,16 @@ def create_extraction_tools(
         include_fields = args.get("include_fields")
 
         # Determine mode based on inputs
+        # Normalize empty lists to None so they don't trigger a mode
+        if slugs is not None and len(slugs) == 0:
+            slugs = None
+        if tags is not None and len(tags) == 0:
+            tags = None
+        if search_terms is not None and len(search_terms) == 0:
+            search_terms = None
+        if file_path is not None and file_path == "":
+            file_path = None
+
         # Mode: Get by Slugs
         if slugs is not None:
             entities = store.search_entities_by_slugs(slugs, worker_id=worker_id)
@@ -272,6 +282,12 @@ def create_extraction_tools(
         list_instances = args.get("list_instances", False)
         limit = args.get("limit", 10)
         show_all = args.get("show_all", False)
+
+        # Normalize empty strings to None so they don't trigger a mode
+        if slug is not None and slug == "":
+            slug = None
+        if second_slug is not None and second_slug == "":
+            second_slug = None
 
         if relationship_type is None:
             return _err("Must provide relationship_type.")
