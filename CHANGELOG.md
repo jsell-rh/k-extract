@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v0.3.0 (2026-04-09)
+
+### Features
+
+- **task-023**: Upfront job generation and global worker queue
+  ([`64412ab`](https://github.com/jsell-rh/k-extract/commit/64412abaa624a15a72bb099d5439e68b9c5a110b))
+
+
 ## v0.2.1 (2026-04-09)
 
 ### Bug Fixes
