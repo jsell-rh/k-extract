@@ -18,48 +18,39 @@ For each data source, an agent creates partition files ("file subsets") that div
 
 This step can be skipped if partitions already exist from a previous run.
 
-### Step 2: Process Data Sources (Job Execution)
+### Step 2: Generate All Jobs (upfront)
 
-This is where the actual knowledge extraction happens. The pipeline:
+Jobs are generated for **all data sources** before any worker starts. The system iterates every configured data source, enumerates its files, and batches them into jobs. All jobs are written to the database before extraction begins.
 
-1. **Initialize ontologies** based on initialization mode: "empty" (start fresh), "starting_point" (load a seed ontology), or "continue" (resume from a prior run's output)
-2. **Generate jobs** by batching source files into appropriately-sized units of work (see [Job Lifecycle](job-lifecycle.md))
-3. **Prepare worker workspaces** with clean staging areas for each worker
-4. **Execute jobs** with agent workers
-5. **Record completion** and save ontology snapshots at data source boundaries
+This gives the system (and the user) a complete picture of the total work scope before committing to the extraction run.
 
-This step can be skipped if the extraction output already exists from a previous run.
+### Step 3: Process Jobs (global execution)
+
+Workers claim jobs from a **single global queue** spanning all data sources. Workers do not process one data source at a time — they pick up the next available pending job regardless of source. This maximizes worker utilization and avoids idle workers while jobs remain in other sources.
+
+The pipeline:
+
+1. **Initialize ontologies** based on initialization mode
+2. **Prepare worker workspaces** with clean staging areas for each worker
+3. **Launch workers** — each claims jobs from the global queue until none remain
+4. **Record completion** per job
 
 ---
 
 ## Orchestrator Role
 
-The orchestrator manages the overall extraction run: initializing state, generating jobs, launching workers, and recording results. Two orchestration models have been used:
+The orchestrator manages the overall extraction run:
 
-### Competing-workers model
+1. **Generate all jobs upfront** — iterate all data sources, enumerate files, batch into jobs, write to database. This happens before any worker launches.
+2. **Reset stale jobs** — any in_progress jobs from a prior interrupted run are reset to pending.
+3. **Launch N worker instances** concurrently via `asyncio.gather`.
+4. Each worker runs a loop: claim the next pending job from the **global queue** (any data source), run the agent, record the result.
+5. Workers continue until no pending jobs remain or the max_jobs cap is reached.
+6. A shared counter tracks total jobs processed across all workers for enforcing global job limits.
 
-Multiple agent workers run concurrently, all competing for jobs from a shared queue:
+Workers claim from a single global queue — they do not process data sources sequentially. A worker that finishes a job from `hypershift` may next pick up a job from `rosa` or `ocm-api-model`. This maximizes worker utilization.
 
-1. Initialize ontologies and generate jobs.
-2. Launch N worker instances concurrently.
-3. Each instance runs a loop: claim the next available job, set up workspace, run agent, record result.
-4. A shared counter tracks total jobs processed across all workers for enforcing global job limits.
-5. Save ontology snapshots when all jobs for a data source complete.
-
-### Round-based model
-
-Workers are assigned specific jobs in fixed-size rounds:
-
-1. Reset any stale in_progress jobs back to pending.
-2. Load all pending jobs sorted by order and divide into rounds sized to the worker count.
-3. For each round:
-   a. Clean each worker's staging area.
-   b. Assign each job in the round to a specific worker.
-   c. Launch all workers in the round as parallel processes.
-   d. Wait for all workers to complete; record success or failure for each.
-4. Report final statistics.
-
-Key differences: In the round-based model, workers run as separate processes (better crash isolation) and there is no queue contention. However, workers cannot pick up extra work if they finish early.
+The `claim_next_job` function no longer filters by `data_source` — it claims the next pending job by global order number. The `cwd` for the agent is determined from the job's `data_source` field (mapped to the corresponding path from the config).
 
 ---
 
@@ -180,6 +171,32 @@ If a worker crashes, its job remains in in_progress. Stale job detection (timeou
 ### Agent permission boundaries
 
 Agents are sandboxed to prevent direct modification of shared state. They can only interact with the ontology through provided tools (search, manage entities, manage relationships, validate and commit). Direct file-writing capabilities are restricted.
+
+---
+
+## Progress Dashboard
+
+The live progress dashboard shows **n+1 progress bars**: one per data source plus one for the overall total.
+
+```
+  k-extract  elapsed: 1h 08m  cost: $31.35
+
+  Total                ━━━━━━━━━━━━━╺━━━━━━━━━━━━━━━━  93/714 jobs
+  hypershift           ━━━━━━━━━━━━━━━━━━━━╺━━━━━━━━━━  87/654 jobs
+  ocm-api-model        ━━━━━━━━━━━━━━━━━━━━━━━━━━━━╺━━  32/34 jobs
+  cluster-api-prov...  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╺━   3/26 jobs
+  rosa                 ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━   0/42 jobs
+  ...
+
+  worker-01:  processing 47bffb3abbcc474c (1793s)
+  worker-02:  processing a1b2c3d4e5f67890 (423s)
+  worker-03:  idle
+  ...
+
+  completed: 93  failed: 29  pending: 592
+```
+
+Since all jobs are generated upfront and workers claim from a global queue, the dashboard can show accurate totals from the start. Per-source bars update as their jobs complete regardless of order.
 
 ---
 
