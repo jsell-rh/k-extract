@@ -1,6 +1,6 @@
 # Task 020: Live Progress Dashboard for `k-extract run`
 
-**Status:** `in-progress`
+**Status:** `ready-for-review`
 **Spec Reference:** specs/process/extraction-pipeline.md, specs/agent/agent-architecture.md
 **Branch:** task-020
 **PR:** #20
@@ -83,4 +83,5 @@ The `k-extract run` command currently produces zero terminal output during extra
 
 ## Relevant Commits
 
-(none yet)
+- `9e1e7ee` — chore(task-020): begin implementation
+- `a30ebfc` — chore(task-020): add PR number

@@ -1,7 +1,8 @@
 """CLI command for `k-extract run`.
 
 Executes the extraction pipeline: loads config, processes data sources,
-runs agent workers, and produces JSONL output.
+runs agent workers, and produces JSONL output. Uses Rich console for
+spinner during setup and live dashboard during extraction.
 """
 
 from __future__ import annotations
@@ -11,6 +12,7 @@ from pathlib import Path
 
 import click
 
+from k_extract.cli.display import get_console
 from k_extract.extraction.logging import configure_logging
 
 
@@ -68,6 +70,8 @@ def run(
     settings = get_settings()
     configure_logging(json_output=settings.log_format == "json")
 
+    console = get_console()
+
     from k_extract.pipeline.orchestrator import run_pipeline
 
     try:
@@ -79,31 +83,33 @@ def run(
                 force=force,
                 log_conversations=log_conversations,
                 db_path=db_path,
+                console=console,
             )
         )
     except SystemExit as e:
         raise click.ClickException(str(e)) from None
 
-    # Print completion summary
-    click.echo("")
+    # Print completion summary with Rich formatting
+    console.print()
     if result.failed_jobs == 0:
-        click.echo(
-            f"Extraction complete. {result.completed_jobs}/{result.total_jobs} "
-            f"jobs completed."
+        console.print(
+            f"[green]Extraction complete.[/green] "
+            f"{result.completed_jobs}/{result.total_jobs} jobs completed."
         )
     else:
-        click.echo(
-            f"Extraction complete. {result.completed_jobs}/{result.total_jobs} "
+        console.print(
+            f"[yellow]Extraction complete.[/yellow] "
+            f"{result.completed_jobs}/{result.total_jobs} "
             f"jobs completed, {result.failed_jobs} failed."
         )
 
-    click.echo(f"Output: {result.output_file} ({result.output_lines} lines)")
-    click.echo(f"Total cost: ${result.total_cost:.2f}")
+    console.print(f"Output: {result.output_file} ({result.output_lines} lines)")
+    console.print(f"Total cost: ${result.total_cost:.2f}")
 
     if result.failed_job_details:
-        click.echo("")
-        click.echo("Failed jobs:")
+        console.print()
+        console.print("[bold]Failed jobs:[/bold]")
         for job_id, error in result.failed_job_details:
-            click.echo(f"  {job_id}: {error}")
-        click.echo("")
-        click.echo("Re-run to retry failed jobs.")
+            console.print(f"  {job_id}: {error}")
+        console.print()
+        console.print("Re-run to retry failed jobs.")

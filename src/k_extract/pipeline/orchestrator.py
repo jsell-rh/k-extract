@@ -9,10 +9,14 @@ entity visibility.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import hashlib
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from rich.console import Console
+from rich.live import Live
+from rich.spinner import Spinner
 from sqlalchemy import text as sa_text
 
 from k_extract.config.loader import load_config
@@ -50,6 +54,7 @@ from k_extract.pipeline.jobs import (
     reset_all_in_progress,
     reset_failed_jobs,
 )
+from k_extract.pipeline.progress import PipelineProgress, render_dashboard
 from k_extract.pipeline.sources import discover_files
 from k_extract.pipeline.worker import WorkerResult, worker_loop
 from k_extract.pipeline.writer import JsonlWriter
@@ -129,6 +134,7 @@ async def run_pipeline(
     force: bool = False,
     log_conversations: bool = False,
     db_path: str | None = None,
+    console: Console | None = None,
 ) -> PipelineResult:
     """Execute the extraction pipeline.
 
@@ -143,6 +149,8 @@ async def run_pipeline(
         force: If True, discard previous state and start fresh.
         log_conversations: If True, log agent conversations to JSONL.
         db_path: Override database path from config.
+        console: Rich Console for live dashboard output. If None, no
+            dashboard is displayed.
 
     Returns:
         PipelineResult with completion stats.
@@ -150,6 +158,16 @@ async def run_pipeline(
     log = get_logger()
     result = PipelineResult()
     settings = get_settings()
+
+    # Setup spinner — shows during config loading, fingerprinting, resume eval
+    setup_live: Live | None = None
+    if console is not None:
+        setup_live = Live(
+            Spinner("dots", text="Setting up pipeline..."),
+            console=console,
+            transient=True,
+        )
+        setup_live.start()
 
     # 1. Load and validate config
     config = load_config(config_path)
@@ -212,6 +230,8 @@ async def run_pipeline(
     )
 
     if decision.action == ResumeAction.HARD_STOP:
+        if setup_live is not None:
+            setup_live.stop()
         raise SystemExit(decision.message)
 
     is_fresh = decision.action == ResumeAction.FRESH_START
@@ -259,6 +279,12 @@ async def run_pipeline(
     if log_conversations:
         conversation_log_dir = Path("logs") / "conversations"
         conversation_log_dir.mkdir(parents=True, exist_ok=True)
+
+    # Stop setup spinner
+    if setup_live is not None:
+        setup_live.stop()
+        assert console is not None
+        console.print("[green]✓[/green] Pipeline setup complete")
 
     # 12. Process data sources in configured order
     jobs_processed_total = 0
@@ -379,6 +405,21 @@ async def run_pipeline(
             shared_counter = [0]
 
         worker_count = min(workers, source_pending)
+
+        # Create progress tracker for live dashboard
+        progress: PipelineProgress | None = None
+        live: Live | None = None
+        if console is not None:
+            progress = PipelineProgress(worker_count)
+            progress.set_data_source(ds.name, source_total, source_pending)
+            live = Live(
+                render_dashboard(progress),
+                console=console,
+                refresh_per_second=2,
+                transient=True,
+            )
+            live.start()
+
         worker_tasks = []
         for i in range(worker_count):
             worker_id = f"{i + 1:02d}"
@@ -396,10 +437,30 @@ async def run_pipeline(
                     max_jobs=source_max,
                     shared_counter=shared_counter,
                     model_id=settings.model_id,
+                    progress=progress,
                 )
             )
 
-        gather_results = await asyncio.gather(*worker_tasks, return_exceptions=True)
+        if live is not None:
+            assert progress is not None
+
+            async def _refresh(lv: Live, pg: PipelineProgress) -> None:
+                while True:
+                    await asyncio.sleep(0.5)
+                    lv.update(render_dashboard(pg))
+
+            refresh_task = asyncio.create_task(_refresh(live, progress))
+            gather_results = await asyncio.gather(*worker_tasks, return_exceptions=True)
+            refresh_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await refresh_task
+            # Final update and stop Live display
+            live.update(render_dashboard(progress))  # type: ignore[arg-type]
+            live.stop()
+            # Print final state as static output for scrollback
+            console.print(render_dashboard(progress))  # type: ignore[arg-type]
+        else:
+            gather_results = await asyncio.gather(*worker_tasks, return_exceptions=True)
 
         # Aggregate worker results, handling any unhandled exceptions
         worker_results: list[WorkerResult] = []
