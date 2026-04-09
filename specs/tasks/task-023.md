@@ -1,8 +1,8 @@
 # Task 023: Upfront Job Generation and Global Worker Queue
 
-**Status:** `not-started`
+**Status:** `in-progress`
 **Spec Reference:** specs/process/extraction-pipeline.md
-**Branch:** (none)
+**Branch:** task-023
 **PR:** (none)
 **Review:** (none)
 
