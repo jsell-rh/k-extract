@@ -54,4 +54,4 @@ Reference: specs/process/extraction-pipeline.md sections on Job Inspection and U
 ## Relevant Commits
 
 - `05f9dd4` — feat(task-013): implement CLI jobs command
-- `pending` — fix(task-013): add agent_instance_id to job detail view
+- `e560f26` — fix(task-013): add agent_instance_id to job detail view
