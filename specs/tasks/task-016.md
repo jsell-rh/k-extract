@@ -1,6 +1,6 @@
 # Task 016: Runtime Context Window Discovery from Claude Agent SDK
 
-**Status:** `needs-revision`
+**Status:** `ready-for-review`
 **Spec Reference:** specs/process/job-lifecycle.md (Section: Batching Strategy)
 **Branch:** task-016
 **PR:** #16

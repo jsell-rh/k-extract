@@ -282,8 +282,13 @@ class TestGenerateCreates:
 class TestRunPipeline:
     @pytest.fixture(autouse=True)
     def _mock_discovery(self) -> Any:
-        """Mock model discovery for all pipeline tests."""
-        caps = ModelCapabilities(context_window=200_000, max_output_tokens=50_000)
+        """Mock model discovery for all pipeline tests.
+
+        Uses values deliberately different from the old hardcoded defaults
+        (CONTEXT_WINDOW=200_000, OUTPUT_RESERVATION=50_000) so tests verify
+        that batching actually uses the discovered values.
+        """
+        caps = ModelCapabilities(context_window=150_000, max_output_tokens=42_000)
         with patch(
             "k_extract.pipeline.orchestrator.discover_model_capabilities",
             new_callable=AsyncMock,

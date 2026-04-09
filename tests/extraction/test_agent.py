@@ -18,6 +18,7 @@ from claude_agent_sdk import (
     UserMessage,
 )
 
+import k_extract.extraction.agent as agent_module
 from k_extract.extraction.agent import (
     DEFAULT_CONTEXT_WINDOW,
     DEFAULT_MAX_OUTPUT_TOKENS,
@@ -1084,6 +1085,10 @@ class TestRunAgent:
 
 
 class TestDiscoverModelCapabilities:
+    def setup_method(self) -> None:
+        """Clear the module-level cache before each test."""
+        agent_module._cached_capabilities = None
+
     @pytest.mark.asyncio
     async def test_discovers_from_result_message(self) -> None:
         """Extracts contextWindow and maxOutputTokens from model_usage."""
@@ -1257,6 +1262,60 @@ class TestDiscoverModelCapabilities:
 
         assert caps.context_window == DEFAULT_CONTEXT_WINDOW
         assert caps.max_output_tokens == DEFAULT_MAX_OUTPUT_TOKENS
+
+    @pytest.mark.asyncio
+    async def test_caches_result_for_reuse(self) -> None:
+        """Second call returns cached result without making another API call."""
+        configure_logging(json_output=True)
+
+        result_msg = ResultMessage(
+            subtype="success",
+            duration_ms=100,
+            duration_api_ms=80,
+            is_error=False,
+            num_turns=1,
+            session_id="sess-1",
+            model_usage={
+                "claude-sonnet-4-6@default": {
+                    "contextWindow": 180000,
+                    "maxOutputTokens": 28000,
+                }
+            },
+        )
+
+        call_count = 0
+
+        async def mock_query(**kwargs: Any) -> Any:
+            nonlocal call_count
+            call_count += 1
+            yield result_msg
+
+        with patch("k_extract.extraction.agent.query", side_effect=mock_query):
+            caps1 = await discover_model_capabilities()
+            caps2 = await discover_model_capabilities()
+
+        # Only one API call should have been made
+        assert call_count == 1
+        # Both calls return the same values
+        assert caps1.context_window == 180000
+        assert caps2.context_window == 180000
+        assert caps1 is caps2
+
+    @pytest.mark.asyncio
+    async def test_fallback_not_cached(self) -> None:
+        """Fallback results (from failures) are NOT cached, allowing retry."""
+        configure_logging(json_output=True)
+
+        async def mock_query_fail(**kwargs: Any) -> Any:
+            raise ConnectionError("SDK unavailable")
+            yield  # make it a generator  # pragma: no cover
+
+        with patch("k_extract.extraction.agent.query", side_effect=mock_query_fail):
+            caps_fallback = await discover_model_capabilities()
+
+        assert caps_fallback.context_window == DEFAULT_CONTEXT_WINDOW
+        # Cache should still be None after fallback
+        assert agent_module._cached_capabilities is None
 
 
 class TestModelCapabilities:

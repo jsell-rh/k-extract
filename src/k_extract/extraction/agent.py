@@ -34,6 +34,9 @@ from k_extract.extraction.logging import ConversationLogger, get_logger
 DEFAULT_CONTEXT_WINDOW = 200_000
 DEFAULT_MAX_OUTPUT_TOKENS = 50_000
 
+# Module-level cache for discovered model capabilities
+_cached_capabilities: ModelCapabilities | None = None
+
 
 @dataclass
 class ModelCapabilities:
@@ -53,6 +56,9 @@ async def discover_model_capabilities(
     ``ResultMessage.model_usage``, which contains ``contextWindow`` and
     ``maxOutputTokens`` for the active model.
 
+    Results are cached at module level so repeated calls reuse the first
+    successful discovery without additional API roundtrips.
+
     Falls back to default values if discovery fails (SDK unavailable,
     no model_usage in response, etc.).
 
@@ -62,6 +68,11 @@ async def discover_model_capabilities(
     Returns:
         ModelCapabilities with discovered or default values.
     """
+    global _cached_capabilities
+
+    if _cached_capabilities is not None:
+        return _cached_capabilities
+
     log = get_logger()
     try:
         options = ClaudeAgentOptions(
@@ -87,10 +98,12 @@ async def discover_model_capabilities(
                             context_window=context_window,
                             max_output_tokens=max_output,
                         )
-                        return ModelCapabilities(
+                        result = ModelCapabilities(
                             context_window=context_window,
                             max_output_tokens=max_output,
                         )
+                        _cached_capabilities = result
+                        return result
 
         log.warning(
             "extraction.model_discovery_no_usage",
