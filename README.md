@@ -27,7 +27,7 @@ Outputs `graph.jsonl`. Ctrl-C anytime — re-run to resume where you left off.
 
 ### 3. Load into kartograph
 
-The output is [kartograph](https://github.com/jsell-rh/kartograph)-compatible JSONL. Feed it to kartograph's mutation endpoint to query your graph.
+The output is [kartograph](https://openshift-hyperfleet.github.io/kartograph/)-compatible JSONL. Feed it to kartograph's mutation endpoint to query your graph.
 
 ## Requirements
 
