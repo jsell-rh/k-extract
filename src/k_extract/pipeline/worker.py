@@ -82,92 +82,99 @@ async def worker_loop(
     log = get_logger(worker_id=worker_id, data_source=data_source)
     result = WorkerResult()
 
-    while True:
-        # Check max_jobs cap (shared across all workers)
-        if max_jobs is not None and (
-            (shared_counter is not None and shared_counter[0] >= max_jobs)
-            or (shared_counter is None and result.jobs_processed >= max_jobs)
-        ):
-            break
+    try:
+        while True:
+            # Check max_jobs cap (shared across all workers)
+            if max_jobs is not None and (
+                (shared_counter is not None and shared_counter[0] >= max_jobs)
+                or (shared_counter is None and result.jobs_processed >= max_jobs)
+            ):
+                break
 
-        # Claim next job
-        with session_factory() as session:
-            job = claim_next_job(session, worker_id, data_source=data_source)
-
-        if job is None:
-            break
-
-        # Increment shared counter immediately after claiming (before await)
-        # to prevent other workers from exceeding the cap
-        if shared_counter is not None:
-            shared_counter[0] += 1
-
-        log.info(
-            "extraction.job_claimed",
-            job_id=job.job_id,
-            file_count=job.file_count,
-            total_characters=job.total_characters,
-        )
-
-        # Clear staging area for this worker
-        store.clear_staging(worker_id)
-
-        # Set up agent for this job
-        mcp_server = create_tool_server(worker_id, store, ontology)
-
-        # Build job description via prompt substitution
-        file_list = _build_file_list(job.files)
-        initial_message = substitute_job_variables(
-            config.prompts.job_description_template,
-            job_id=job.job_id,
-            file_count=job.file_count,
-            total_characters=job.total_characters,
-            file_list=file_list,
-        )
-
-        # Run agent
-        agent_result: AgentResult = await run_agent(
-            worker_id=worker_id,
-            system_prompt=config.prompts.system_prompt,
-            initial_message=initial_message,
-            mcp_server=mcp_server,
-            job_id=job.job_id,
-            data_source=data_source,
-            cwd=str(source_path),
-            conversation_log_dir=conversation_log_dir,
-        )
-
-        result.jobs_processed += 1
-        result.cumulative_usage.add(agent_result.usage)
-
-        if agent_result.success:
-            # Emit CREATE operations for committed entities/relationships
-            committed_entities, committed_rels = store.pop_committed(worker_id)
-            if committed_entities or committed_rels:
-                creates = generate_creates(
-                    committed_entities,
-                    committed_rels,
-                    data_source,
-                    ontology,
-                )
-                await writer.write_operations(creates)
-
-            # Mark job as completed
+            # Claim next job
             with session_factory() as session:
-                mark_completed(session, job.job_id)
-            result.jobs_succeeded += 1
-            log.info("extraction.job_completed", job_id=job.job_id)
-        else:
-            # Mark job as failed
-            error_msg = agent_result.error_message or "Unknown error"
-            with session_factory() as session:
-                mark_failed(session, job.job_id, error_msg)
-            result.jobs_failed += 1
-            result.failed_job_details.append((job.job_id, error_msg))
-            log.error(
-                "extraction.job_failed",
+                job = claim_next_job(session, worker_id, data_source=data_source)
+
+            if job is None:
+                break
+
+            # Increment shared counter immediately after claiming (before await)
+            # to prevent other workers from exceeding the cap
+            if shared_counter is not None:
+                shared_counter[0] += 1
+
+            log.info(
+                "extraction.job_claimed",
                 job_id=job.job_id,
-                error=error_msg,
+                file_count=job.file_count,
+                total_characters=job.total_characters,
             )
+
+            # Clear staging area for this worker
+            store.clear_staging(worker_id)
+
+            # Set up agent for this job
+            mcp_server = create_tool_server(worker_id, store, ontology)
+
+            # Build job description via prompt substitution
+            file_list = _build_file_list(job.files)
+            initial_message = substitute_job_variables(
+                config.prompts.job_description_template,
+                job_id=job.job_id,
+                file_count=job.file_count,
+                total_characters=job.total_characters,
+                file_list=file_list,
+            )
+
+            # Run agent
+            agent_result: AgentResult = await run_agent(
+                worker_id=worker_id,
+                system_prompt=config.prompts.system_prompt,
+                initial_message=initial_message,
+                mcp_server=mcp_server,
+                job_id=job.job_id,
+                data_source=data_source,
+                cwd=str(source_path),
+                conversation_log_dir=conversation_log_dir,
+            )
+
+            result.jobs_processed += 1
+            result.cumulative_usage.add(agent_result.usage)
+
+            if agent_result.success:
+                # Emit CREATE operations for committed entities/relationships
+                committed_entities, committed_rels = store.pop_committed(worker_id)
+                if committed_entities or committed_rels:
+                    creates = generate_creates(
+                        committed_entities,
+                        committed_rels,
+                        data_source,
+                        ontology,
+                    )
+                    await writer.write_operations(creates)
+
+                # Mark job as completed
+                with session_factory() as session:
+                    mark_completed(session, job.job_id)
+                result.jobs_succeeded += 1
+                log.info("extraction.job_completed", job_id=job.job_id)
+            else:
+                # Mark job as failed
+                error_msg = agent_result.error_message or "Unknown error"
+                with session_factory() as session:
+                    mark_failed(session, job.job_id, error_msg)
+                result.jobs_failed += 1
+                result.failed_job_details.append((job.job_id, error_msg))
+                log.error(
+                    "extraction.job_failed",
+                    job_id=job.job_id,
+                    error=error_msg,
+                )
+    except Exception as exc:
+        log.error(
+            "extraction.worker_crashed",
+            worker_id=worker_id,
+            error=str(exc),
+        )
 
     return result

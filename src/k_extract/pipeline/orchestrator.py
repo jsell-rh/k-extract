@@ -315,32 +315,33 @@ async def run_pipeline(
 
         total_jobs += source_total
 
+        # Count already-completed and already-failed jobs from prior runs
+        with session_factory() as session:
+            already_completed = (
+                session.execute(
+                    sa_text(
+                        "SELECT COUNT(*) FROM jobs "
+                        "WHERE data_source = :ds AND status = :status"
+                    ),
+                    {"ds": ds.name, "status": JobStatus.COMPLETED.value},
+                ).scalar()
+                or 0
+            )
+            already_failed = (
+                session.execute(
+                    sa_text(
+                        "SELECT COUNT(*) FROM jobs "
+                        "WHERE data_source = :ds AND status = :status"
+                    ),
+                    {"ds": ds.name, "status": JobStatus.FAILED.value},
+                ).scalar()
+                or 0
+            )
+        total_completed += already_completed
+        total_failed += already_failed
+
         if source_pending == 0:
             log.info("pipeline.source_complete", data_source=ds.name)
-            # Count already-completed jobs
-            with session_factory() as session:
-                already_completed = (
-                    session.execute(
-                        sa_text(
-                            "SELECT COUNT(*) FROM jobs "
-                            "WHERE data_source = :ds AND status = :status"
-                        ),
-                        {"ds": ds.name, "status": JobStatus.COMPLETED.value},
-                    ).scalar()
-                    or 0
-                )
-                already_failed = (
-                    session.execute(
-                        sa_text(
-                            "SELECT COUNT(*) FROM jobs "
-                            "WHERE data_source = :ds AND status = :status"
-                        ),
-                        {"ds": ds.name, "status": JobStatus.FAILED.value},
-                    ).scalar()
-                    or 0
-                )
-            total_completed += already_completed
-            total_failed += already_failed
             continue
 
         # Compute remaining max_jobs budget for this source
@@ -378,9 +379,20 @@ async def run_pipeline(
                 )
             )
 
-        worker_results: list[WorkerResult] = await asyncio.gather(*worker_tasks)
+        gather_results = await asyncio.gather(*worker_tasks, return_exceptions=True)
 
-        # Aggregate worker results
+        # Aggregate worker results, handling any unhandled exceptions
+        worker_results: list[WorkerResult] = []
+        for gr in gather_results:
+            if isinstance(gr, BaseException):
+                log.error(
+                    "pipeline.worker_crashed",
+                    error=str(gr),
+                    data_source=ds.name,
+                )
+                continue
+            worker_results.append(gr)
+
         for wr in worker_results:
             jobs_processed_total += wr.jobs_processed
             total_completed += wr.jobs_succeeded

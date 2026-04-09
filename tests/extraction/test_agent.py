@@ -276,7 +276,7 @@ class TestHandleAssistantMessage:
         assert usage.input_tokens == 100
 
     def test_logs_text_block_to_conversation(self, tmp_path: Path) -> None:
-        conv_logger = ConversationLogger(tmp_path, "01")
+        conv_logger = ConversationLogger(tmp_path, "01", "job-1")
         usage = UsageStats()
         msg = AssistantMessage(
             content=[TextBlock(text="hello")],
@@ -286,14 +286,14 @@ class TestHandleAssistantMessage:
         _handle_assistant_message(msg, usage=usage, conv_logger=conv_logger)
         conv_logger.close()
 
-        lines = (tmp_path / "worker-01.jsonl").read_text().strip().split("\n")
+        lines = (tmp_path / "worker_01_job-1.jsonl").read_text().strip().split("\n")
         assert len(lines) == 1
         entry = json.loads(lines[0])
         assert entry["type"] == "assistant_text"
         assert entry["text"] == "hello"
 
     def test_logs_tool_use_block_to_conversation(self, tmp_path: Path) -> None:
-        conv_logger = ConversationLogger(tmp_path, "02")
+        conv_logger = ConversationLogger(tmp_path, "02", "job-2")
         usage = UsageStats()
         msg = AssistantMessage(
             content=[
@@ -307,7 +307,7 @@ class TestHandleAssistantMessage:
         _handle_assistant_message(msg, usage=usage, conv_logger=conv_logger)
         conv_logger.close()
 
-        lines = (tmp_path / "worker-02.jsonl").read_text().strip().split("\n")
+        lines = (tmp_path / "worker_02_job-2.jsonl").read_text().strip().split("\n")
         entry = json.loads(lines[0])
         assert entry["type"] == "tool_use"
         assert entry["tool"] == "manage_entity"
@@ -332,7 +332,7 @@ class TestHandleUserMessage:
         _handle_user_message(msg, conv_logger=None)
 
     def test_logs_tool_result_block(self, tmp_path: Path) -> None:
-        conv_logger = ConversationLogger(tmp_path, "01")
+        conv_logger = ConversationLogger(tmp_path, "01", "job-1")
         msg = UserMessage(
             content=[
                 ToolResultBlock(
@@ -345,7 +345,7 @@ class TestHandleUserMessage:
         _handle_user_message(msg, conv_logger=conv_logger)
         conv_logger.close()
 
-        lines = (tmp_path / "worker-01.jsonl").read_text().strip().split("\n")
+        lines = (tmp_path / "worker_01_job-1.jsonl").read_text().strip().split("\n")
         assert len(lines) == 1
         entry = json.loads(lines[0])
         assert entry["type"] == "tool_result"
@@ -354,7 +354,7 @@ class TestHandleUserMessage:
         assert entry["is_error"] is False
 
     def test_logs_tool_result_error(self, tmp_path: Path) -> None:
-        conv_logger = ConversationLogger(tmp_path, "01")
+        conv_logger = ConversationLogger(tmp_path, "01", "job-1")
         msg = UserMessage(
             content=[
                 ToolResultBlock(
@@ -367,19 +367,19 @@ class TestHandleUserMessage:
         _handle_user_message(msg, conv_logger=conv_logger)
         conv_logger.close()
 
-        lines = (tmp_path / "worker-01.jsonl").read_text().strip().split("\n")
+        lines = (tmp_path / "worker_01_job-1.jsonl").read_text().strip().split("\n")
         entry = json.loads(lines[0])
         assert entry["type"] == "tool_result"
         assert entry["is_error"] is True
 
     def test_logs_string_content(self, tmp_path: Path) -> None:
         """UserMessage with string content is logged as user_text."""
-        conv_logger = ConversationLogger(tmp_path, "01")
+        conv_logger = ConversationLogger(tmp_path, "01", "job-1")
         msg = UserMessage(content="Process these files.")
         _handle_user_message(msg, conv_logger=conv_logger)
         conv_logger.close()
 
-        lines = (tmp_path / "worker-01.jsonl").read_text().strip().split("\n")
+        lines = (tmp_path / "worker_01_job-1.jsonl").read_text().strip().split("\n")
         assert len(lines) == 1
         entry = json.loads(lines[0])
         assert entry["type"] == "user_text"
@@ -387,21 +387,21 @@ class TestHandleUserMessage:
 
     def test_logs_text_block_in_content_list(self, tmp_path: Path) -> None:
         """TextBlock in UserMessage content list is logged as user_text."""
-        conv_logger = ConversationLogger(tmp_path, "01")
+        conv_logger = ConversationLogger(tmp_path, "01", "job-1")
         msg = UserMessage(
             content=[TextBlock(text="Some user text")],
         )
         _handle_user_message(msg, conv_logger=conv_logger)
         conv_logger.close()
 
-        lines = (tmp_path / "worker-01.jsonl").read_text().strip().split("\n")
+        lines = (tmp_path / "worker_01_job-1.jsonl").read_text().strip().split("\n")
         entry = json.loads(lines[0])
         assert entry["type"] == "user_text"
         assert entry["text"] == "Some user text"
 
     def test_logs_multiple_tool_results(self, tmp_path: Path) -> None:
         """Multiple ToolResultBlocks are each logged separately."""
-        conv_logger = ConversationLogger(tmp_path, "01")
+        conv_logger = ConversationLogger(tmp_path, "01", "job-1")
         msg = UserMessage(
             content=[
                 ToolResultBlock(tool_use_id="tu-1", content="Result 1"),
@@ -411,21 +411,21 @@ class TestHandleUserMessage:
         _handle_user_message(msg, conv_logger=conv_logger)
         conv_logger.close()
 
-        lines = (tmp_path / "worker-01.jsonl").read_text().strip().split("\n")
+        lines = (tmp_path / "worker_01_job-1.jsonl").read_text().strip().split("\n")
         assert len(lines) == 2
         assert json.loads(lines[0])["tool_use_id"] == "tu-1"
         assert json.loads(lines[1])["tool_use_id"] == "tu-2"
 
     def test_omits_none_fields(self, tmp_path: Path) -> None:
         """None content and is_error are omitted from the log entry."""
-        conv_logger = ConversationLogger(tmp_path, "01")
+        conv_logger = ConversationLogger(tmp_path, "01", "job-1")
         msg = UserMessage(
             content=[ToolResultBlock(tool_use_id="tu-1")],
         )
         _handle_user_message(msg, conv_logger=conv_logger)
         conv_logger.close()
 
-        lines = (tmp_path / "worker-01.jsonl").read_text().strip().split("\n")
+        lines = (tmp_path / "worker_01_job-1.jsonl").read_text().strip().split("\n")
         entry = json.loads(lines[0])
         assert entry["type"] == "tool_result"
         assert entry["tool_use_id"] == "tu-1"
@@ -440,37 +440,37 @@ class TestHandleUserMessage:
 
 class TestConversationLogger:
     def test_creates_file(self, tmp_path: Path) -> None:
-        logger = ConversationLogger(tmp_path, "01")
-        assert (tmp_path / "worker-01.jsonl").exists()
+        logger = ConversationLogger(tmp_path, "01", "job-1")
+        assert (tmp_path / "worker_01_job-1.jsonl").exists()
         logger.close()
 
     def test_creates_parent_dirs(self, tmp_path: Path) -> None:
         nested = tmp_path / "logs" / "conv"
-        logger = ConversationLogger(nested, "01")
-        assert (nested / "worker-01.jsonl").exists()
+        logger = ConversationLogger(nested, "01", "job-1")
+        assert (nested / "worker_01_job-1.jsonl").exists()
         logger.close()
 
     def test_writes_jsonl(self, tmp_path: Path) -> None:
-        logger = ConversationLogger(tmp_path, "01")
+        logger = ConversationLogger(tmp_path, "01", "job-1")
         logger.log_message("test", {"key": "value"})
         logger.log_message("test2", {"key2": "value2"})
         logger.close()
 
-        lines = (tmp_path / "worker-01.jsonl").read_text().strip().split("\n")
+        lines = (tmp_path / "worker_01_job-1.jsonl").read_text().strip().split("\n")
         assert len(lines) == 2
         assert json.loads(lines[0])["type"] == "test"
         assert json.loads(lines[1])["type"] == "test2"
 
     def test_appends_to_existing(self, tmp_path: Path) -> None:
-        logger1 = ConversationLogger(tmp_path, "01")
+        logger1 = ConversationLogger(tmp_path, "01", "job-1")
         logger1.log_message("first", {})
         logger1.close()
 
-        logger2 = ConversationLogger(tmp_path, "01")
+        logger2 = ConversationLogger(tmp_path, "01", "job-1")
         logger2.log_message("second", {})
         logger2.close()
 
-        lines = (tmp_path / "worker-01.jsonl").read_text().strip().split("\n")
+        lines = (tmp_path / "worker_01_job-1.jsonl").read_text().strip().split("\n")
         assert len(lines) == 2
 
 
@@ -774,7 +774,7 @@ class TestRunAgent:
         assert result.usage.cost_usd == 0.05
 
         # Conversation log should exist with full conversation
-        conv_file = tmp_path / "conv" / "worker-01.jsonl"
+        conv_file = tmp_path / "conv" / "worker_01_job-1.jsonl"
         assert conv_file.exists()
         lines = conv_file.read_text().strip().split("\n")
         # assistant_text + tool_use + tool_result + result
@@ -904,7 +904,7 @@ class TestRunAgent:
 
         assert result.success is False
 
-        conv_file = conv_dir / "worker-01.jsonl"
+        conv_file = conv_dir / "worker_01_job-1.jsonl"
         lines = conv_file.read_text().strip().split("\n")
         assert len(lines) == 1
         entry = json.loads(lines[0])
@@ -1067,7 +1067,7 @@ class TestRunAgent:
             )
 
         assert result.success is True
-        lines = (conv_dir / "worker-01.jsonl").read_text().strip().split("\n")
+        lines = (conv_dir / "worker_01_job-1.jsonl").read_text().strip().split("\n")
         # text block + tool_use block + result
         assert len(lines) == 3
         types = [json.loads(line)["type"] for line in lines]

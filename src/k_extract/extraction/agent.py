@@ -189,7 +189,7 @@ async def run_agent(
 
     conv_logger: ConversationLogger | None = None
     if conversation_log_dir is not None:
-        conv_logger = ConversationLogger(conversation_log_dir, worker_id)
+        conv_logger = ConversationLogger(conversation_log_dir, worker_id, job_id)
 
     try:
         async with ClaudeSDKClient(options=options) as client:

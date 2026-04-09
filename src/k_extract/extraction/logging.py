@@ -5,7 +5,7 @@ Provides structlog configuration with two output modes:
 - JSON output for machine-consumable log streams
 
 Also provides a conversation logger that streams agent messages
-to per-worker JSONL files for debugging.
+to per-job JSONL files for debugging.
 """
 
 from __future__ import annotations
@@ -58,17 +58,22 @@ def get_logger(**initial_context: Any) -> structlog.stdlib.BoundLogger:
 
 
 class ConversationLogger:
-    """Streams agent conversation messages to a per-worker JSONL file.
+    """Streams agent conversation messages to a per-job JSONL file.
 
     Each message is written as a single JSON line, flushed immediately
     for crash-safety. Off by default — only created when
     ``--log-conversations`` is enabled.
+
+    One file is created per worker-job combination (e.g.,
+    ``worker_01_<job_id>.jsonl``), enabling post-hoc debugging and
+    reproduction of individual job conversations.
     """
 
-    def __init__(self, output_dir: Path, worker_id: str) -> None:
+    def __init__(self, output_dir: Path, worker_id: str, job_id: str) -> None:
         self._output_dir = output_dir
         self._worker_id = worker_id
-        self._file_path = output_dir / f"worker-{worker_id}.jsonl"
+        self._job_id = job_id
+        self._file_path = output_dir / f"worker_{worker_id}_{job_id}.jsonl"
         output_dir.mkdir(parents=True, exist_ok=True)
         self._file = open(self._file_path, "a", encoding="utf-8")  # noqa: SIM115
 
