@@ -122,7 +122,10 @@ async def run_guided_session(
     console.print(f"\nProblem statement: {problem_statement}\n")
 
     # Step 2: Data inventory
-    data_sources_config, all_files, inventories = _scan_data_sources(data_source_paths)
+    with spinner("Scanning data sources", console):
+        data_sources_config, all_files, inventories = _scan_data_sources(
+            data_source_paths
+        )
     _display_inventory(inventories, console)
 
     # Step 3: AI ontology proposal

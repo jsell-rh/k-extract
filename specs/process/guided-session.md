@@ -38,6 +38,8 @@ The system scans all provided paths and reports what it found:
 
 Files matched by `.gitignore` (if present in a data source) are excluded from the inventory. This prevents build artifacts, vendored dependencies, and generated files from polluting the scan.
 
+A spinner is shown during the scan so the user knows work is happening (scanning can take noticeable time on large repos).
+
 This gives the user and the system a shared understanding of the raw material before proposing an ontology.
 
 ### Step 3: Ontology Proposal

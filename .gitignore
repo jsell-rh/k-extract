@@ -7,3 +7,4 @@ dist/
 graph.jsonl
 extraction.db
 extraction.db*
+logs/
