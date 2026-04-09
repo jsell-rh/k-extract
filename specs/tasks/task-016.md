@@ -61,4 +61,4 @@ Reference: specs/process/job-lifecycle.md section "Batching Strategy (k-extract)
 
 ## Relevant Commits
 
-- `pending` — feat(task-016): runtime context window discovery from Claude Agent SDK
+- `301c1c6` — feat(task-016): runtime context window discovery from Claude Agent SDK
