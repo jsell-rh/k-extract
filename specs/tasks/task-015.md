@@ -1,8 +1,8 @@
 # Task 015: Add Entity Creation Mode to manage_entity Tool
 
-**Status:** `not-started`
+**Status:** `in-progress`
 **Spec Reference:** specs/agent/agent-tools.md (Section 3: Manage Entity)
-**Branch:** (none)
+**Branch:** task-015
 **PR:** (none)
 **Review:** (none)
 
