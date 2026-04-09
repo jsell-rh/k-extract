@@ -85,3 +85,4 @@ The `k-extract run` command currently produces zero terminal output during extra
 
 - `9e1e7ee` — chore(task-020): begin implementation
 - `a30ebfc` — chore(task-020): add PR number
+- `f74135b` — fix(task-020): address review — lifecycle placement and spinner coverage
