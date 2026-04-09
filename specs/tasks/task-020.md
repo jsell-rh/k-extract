@@ -3,7 +3,7 @@
 **Status:** `in-progress`
 **Spec Reference:** specs/process/extraction-pipeline.md, specs/agent/agent-architecture.md
 **Branch:** task-020
-**PR:** (none)
+**PR:** #20
 **Review:** (none)
 
 ## Description
