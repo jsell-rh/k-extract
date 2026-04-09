@@ -3,7 +3,7 @@
 **Status:** `in-progress`
 **Spec Reference:** specs/agent/agent-tools.md (Section 3: Manage Entity)
 **Branch:** task-015
-**PR:** (none)
+**PR:** #15
 **Review:** (none)
 
 ## Description
