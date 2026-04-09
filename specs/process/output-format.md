@@ -91,5 +91,6 @@ k-extract is responsible for:
 3. Generating deterministic IDs for entities (same entity discovered twice should get the same ID)
 4. Populating `data_source_id` and `source_path` on every CREATE
 5. Generating `slug` values for all nodes
+6. **Ensuring no duplicate IDs within the output.** Kartograph's batch endpoint rejects batches containing duplicate IDs. The manage_entity and manage_relationship tools must deduplicate at the tool level — if an entity or relationship with the same ID already exists (in the shared store or the agent's staging area), the tool returns the existing entity instead of emitting a duplicate CREATE. See [agent-tools.md](../agent/agent-tools.md) for deduplication behavior.
 
 k-extract does NOT currently use UPDATE or DELETE operations — those exist in the kartograph contract for other producers. k-extract's extraction model is discovery-based (CREATE with MERGE semantics).

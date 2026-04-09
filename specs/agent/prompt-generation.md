@@ -13,6 +13,7 @@ The "how to be an extraction agent" boilerplate. This is the same regardless of 
 - Tool usage rules (how to use search, manage, commit tools)
 - Efficiency constraints (don't narrate, work autonomously)
 - Quality constraints (don't create duplicates, verify before creating, use consistent slugs)
+- **Deduplication instructions:** "Before creating any entity or relationship, search for it by slug. If it already exists, use the existing one — do not create a duplicate. The tools enforce this at the tool level, but searching first avoids unnecessary tool calls and helps you decide whether to create or update."
 
 Lives as a template file in the k-extract package — not hardcoded in Python. This is an implementation detail of `init`; by the time the config exists, the template content has been composed into the final prompts.
 

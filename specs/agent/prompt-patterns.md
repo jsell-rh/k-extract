@@ -158,7 +158,7 @@ The job description and supplementary instructions contain detailed instructions
 | Do not create custom scripts | Job description "Your Scripts" section | Agents must use provided tools only |
 | Do not create or modify files directly | System prompt, disallowed_tools | All mutations through tool scripts |
 | Set processed_by_agent=true only when done | Job description, supplementary docs | Prevents premature completion marking |
-| Check for existing entities before creating | Implied by edit-only pattern | Prevents duplicates |
+| Search for existing entities before creating | System prompt + tool behavior | **Critical for deduplication.** Agents must use the search tool to check if an entity already exists before calling the create tool. The create tool also enforces this at the tool level (returns existing entity if slug matches), but the agent should search first to avoid unnecessary tool calls and to decide whether to create or update. The prompt must instruct: "Before creating any entity, search for it by slug. If it exists, use it. If it doesn't, create it." |
 | Fix validation errors and re-run | Job description, commit tool docs | Retry-friendly completion |
 | If tools block, wait and retry | Job description, system prompt | Handle lock contention |
 | Don't narrate, don't summarize | System prompt efficiency rules | Token efficiency |

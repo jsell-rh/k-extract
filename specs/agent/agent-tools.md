@@ -118,23 +118,34 @@ Same as search entities: default cap of 10 with warning if more exist.
 
 ### Behavior
 
-1. Load current instance from virtual ontology. Error if slug not found.
-2. Parse the properties object. Must be a non-empty dict.
-3. **Validate property types** against entity type schema.
-4. **Validate tags** if `tags` key is present in changes (against `tag_definitions`).
-5. Deep-copy current instance, merge changes into `properties`.
-6. Stage the update in the worker's private store.
+1. Check if an entity with the given slug already exists in the virtual ontology (shared store + agent's staging area).
+2. **If it exists:** return the existing entity to the agent. Do not emit a duplicate CREATE. The agent can then decide to UPDATE it if properties need changing.
+3. **If it does not exist:** proceed with creation:
+   a. Parse the properties object. Must be a non-empty dict.
+   b. **Validate property types** against entity type schema.
+   c. **Validate tags** if `tags` key is present (against `tag_definitions`).
+   d. Generate the deterministic ID from the slug (via kartograph's `EntityIdGenerator` hash).
+   e. Stage the CREATE in the worker's private store.
+
+### Deduplication
+
+The tool is the **single enforcement point** for preventing duplicate IDs in the JSONL output. Kartograph's batch endpoint rejects batches containing duplicate IDs — even though CREATE uses MERGE semantics, the batch must contain unique IDs.
+
+The tool MUST check both:
+- The shared ontology store (entities committed by other workers)
+- The agent's own staging area (entities staged in this session but not yet committed)
+
+If a match is found, the tool returns the existing entity with a message indicating it already exists. The agent can then use the existing entity's slug/ID for relationships without creating a duplicate.
 
 ### Validation
 
 - Entity type must be in the editable set (not structural).
-- Slug must exist in the virtual view.
 - Property values must pass type validation against the schema.
 - Tags must be from the entity type's `tag_definitions`.
 
 ### Generalizable Requirements
 
-- **Edit-only for pre-populated instances.** Agents do not create entity instances; instances are pre-populated by ingestion. Agents enrich them with metadata.
+- **Deduplication at the tool level.** The tool checks for existing entities before staging a CREATE. This prevents duplicate IDs regardless of whether the agent remembers to search first.
 - **Partial updates.** Only included keys are changed; omitted properties are preserved.
 - **Schema-driven validation.** Property types and tag values are validated against the ontology schema, not hardcoded rules.
 - **Structural types are read-only.** The system must distinguish between agent-editable and ingestion-only entity types.
@@ -159,9 +170,10 @@ Same as search entities: default cap of 10 with warning if more exist.
 1. Resolve source and target entity types by scanning all entity types for the given slugs. Error if either slug not found.
 2. Construct composite key: `SourceType|REFERENCES|TargetType`.
 3. Validate composite key exists in the relationship ontology schema.
-4. Check for existing relationship with same source+target+type. **Reject duplicates** (must use edit mode instead).
-5. Build instance with source/target metadata and optional properties (e.g., `context`).
-6. Stage the update.
+4. Check for existing relationship with same source+target+type in the virtual view (shared store + staging area). **If it already exists, return the existing relationship** — do not emit a duplicate CREATE. The agent can use edit mode if properties need changing.
+5. Generate the deterministic edge ID from the start_id, edge label, and end_id (via kartograph's `EntityIdGenerator.generate_edge_id`).
+6. Build instance with source/target metadata and optional properties (e.g., `context`).
+7. Stage the CREATE.
 
 ### Edit Mode
 
@@ -175,7 +187,7 @@ Same as search entities: default cap of 10 with warning if more exist.
 
 - **Entity type auto-detection.** Source and target types are resolved from slugs, not specified by the agent. This simplifies the agent's job.
 - **Composite key validation.** The relationship type (source_type, rel_type, target_type triple) must exist in the ontology schema. No new relationship types can be created at runtime.
-- **Duplicate prevention.** Creating a relationship that already exists is an error.
+- **Duplicate prevention.** Creating a relationship that already exists returns the existing relationship instead of erroring or emitting a duplicate. This is the enforcement point for unique IDs in the JSONL output.
 - **Structural relationships are read-only.** Same pattern as entities: distinguish agent-writable from ingestion-only.
 
 ---
