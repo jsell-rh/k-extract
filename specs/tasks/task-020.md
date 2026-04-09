@@ -1,8 +1,8 @@
 # Task 020: Live Progress Dashboard for `k-extract run`
 
-**Status:** `not-started`
+**Status:** `in-progress`
 **Spec Reference:** specs/process/extraction-pipeline.md, specs/agent/agent-architecture.md
-**Branch:** (none)
+**Branch:** task-020
 **PR:** (none)
 **Review:** (none)
 
