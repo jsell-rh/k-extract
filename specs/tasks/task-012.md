@@ -78,3 +78,4 @@ Reference: specs/process/extraction-pipeline.md, specs/concurrency/concurrency-m
 ## Relevant Commits
 
 - `e48d3b5` — feat(task-012): implement k-extract run orchestrator and workers
+- `b857cd8` — fix(task-012): address all review findings from round 1
