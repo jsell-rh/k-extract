@@ -1,8 +1,8 @@
 # Task 021: Respect .gitignore in File Discovery
 
-**Status:** `not-started`
+**Status:** `in-progress`
 **Spec Reference:** specs/process/guided-session.md, specs/process/extraction-pipeline.md
-**Branch:** (none)
+**Branch:** task-021
 **PR:** (none)
 **Review:** (none)
 
