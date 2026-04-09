@@ -87,3 +87,4 @@ The `k-extract run` command currently produces zero terminal output during extra
 - `a30ebfc` — chore(task-020): add PR number
 - `f74135b` — fix(task-020): address review — lifecycle placement and spinner coverage
 - `4ae9220` — fix(task-020): wrap all Live displays in try/finally for exception-safe cleanup
+- `a27178c` — fix(task-020): reset worker states on data source transition and update progress on crash
