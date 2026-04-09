@@ -63,7 +63,10 @@ def run(
     db_path: str | None,
 ) -> None:
     """Execute the extraction pipeline."""
-    configure_logging()
+    from k_extract.config.settings import get_settings
+
+    settings = get_settings()
+    configure_logging(json_output=settings.log_format == "json")
 
     from k_extract.pipeline.orchestrator import run_pipeline
 
