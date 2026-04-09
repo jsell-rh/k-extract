@@ -303,9 +303,24 @@ async def run_pipeline(
         context_window, prompt_overhead, output_reservation, SAFETY_MARGIN
     )
 
+    # Create progress tracker once at pipeline start (persists across data sources)
+    progress: PipelineProgress | None = None
+    if console is not None:
+        progress = PipelineProgress(workers)
+
     for ds in config.data_sources:
         ds_path = Path(ds.path)
         log.info("pipeline.processing_source", data_source=ds.name)
+
+        # Show spinner during job generation (part of setup phase)
+        job_gen_live: Live | None = None
+        if console is not None:
+            job_gen_live = Live(
+                Spinner("dots", text=f"Generating jobs for {ds.name}..."),
+                console=console,
+                transient=True,
+            )
+            job_gen_live.start()
 
         # Generate jobs for this source if fresh start or no jobs exist
         with session_factory() as session:
@@ -337,6 +352,10 @@ async def run_pipeline(
                 data_source=ds.name,
                 count=len(jobs),
             )
+
+        # Stop job generation spinner
+        if job_gen_live is not None:
+            job_gen_live.stop()
 
         # Count total and pending jobs for this source
         with session_factory() as session:
@@ -406,11 +425,9 @@ async def run_pipeline(
 
         worker_count = min(workers, source_pending)
 
-        # Create progress tracker for live dashboard
-        progress: PipelineProgress | None = None
+        # Update progress tracker for this data source and start live dashboard
         live: Live | None = None
-        if console is not None:
-            progress = PipelineProgress(worker_count)
+        if console is not None and progress is not None:
             progress.set_data_source(ds.name, source_total, source_pending)
             live = Live(
                 render_dashboard(progress),
