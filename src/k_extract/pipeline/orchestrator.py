@@ -419,7 +419,7 @@ async def run_pipeline(
         if job_gen_live is not None:
             job_gen_live.stop()
 
-    # 13. Count global totals across all sources
+    # 13. Count global and per-source totals
     with session_factory() as session:
         total_jobs = session.execute(sa_text("SELECT COUNT(*) FROM jobs")).scalar() or 0
         total_pending = (
@@ -443,6 +443,18 @@ async def run_pipeline(
             ).scalar()
             or 0
         )
+
+        # Per-source total job counts (ordered as in config)
+        per_source_totals: dict[str, int] = {}
+        for ds in config.data_sources:
+            count = (
+                session.execute(
+                    sa_text("SELECT COUNT(*) FROM jobs WHERE data_source = :ds"),
+                    {"ds": ds.name},
+                ).scalar()
+                or 0
+            )
+            per_source_totals[ds.name] = int(count)
 
     if console is not None:
         console.print(
@@ -468,12 +480,12 @@ async def run_pipeline(
 
     worker_count = min(workers, total_pending)
 
-    # Create progress tracker at pipeline start
+    # Create progress tracker at pipeline start with per-source counts
     progress: PipelineProgress | None = None
     live: Live | None = None
     if console is not None:
         progress = PipelineProgress(workers)
-        progress.set_data_source("k-extract", total_jobs, total_pending)
+        progress.register_sources(per_source_totals)
         live = Live(
             render_dashboard(progress),
             console=console,

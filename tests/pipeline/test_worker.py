@@ -658,7 +658,7 @@ class TestWorkerLoop:
         _insert_job(session_factory, "crash-job")
 
         progress = PipelineProgress(worker_count=1)
-        progress.set_data_source("test-source", total=1, pending=1)
+        progress.register_sources({"test-source": 1})
 
         with (
             patch(

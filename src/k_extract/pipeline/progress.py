@@ -16,6 +16,9 @@ from rich.progress import BarColumn, MofNCompleteColumn, Progress, TextColumn
 from rich.table import Table
 from rich.text import Text
 
+# Maximum display width for data source names before truncation
+_MAX_SOURCE_NAME_LEN = 20
+
 
 class WorkerStatus(Enum):
     """Status of a worker."""
@@ -42,6 +45,20 @@ class WorkerState:
         return None
 
 
+@dataclass
+class SourceProgress:
+    """Tracks per-data-source job counts."""
+
+    total: int = 0
+    completed: int = 0
+    failed: int = 0
+
+    @property
+    def pending(self) -> int:
+        """Pending jobs for this source."""
+        return self.total - self.completed - self.failed
+
+
 class PipelineProgress:
     """Tracks live pipeline state for dashboard display.
 
@@ -51,13 +68,10 @@ class PipelineProgress:
     """
 
     def __init__(self, worker_count: int) -> None:
-        self.total_jobs: int = 0
-        self.completed_jobs: int = 0
-        self.failed_jobs: int = 0
-        self.pending_jobs: int = 0
         self.cumulative_cost: float = 0.0
-        self.current_data_source: str = ""
         self._start_time: float = time.monotonic()
+        self._source_order: list[str] = []
+        self._sources: dict[str, SourceProgress] = {}
         self.workers: dict[str, WorkerState] = {}
         for i in range(worker_count):
             wid = f"{i + 1:02d}"
@@ -68,19 +82,37 @@ class PipelineProgress:
         """Elapsed wall-clock time since pipeline start."""
         return time.monotonic() - self._start_time
 
-    def set_data_source(self, name: str, total: int, pending: int) -> None:
-        """Update progress for a new data source phase."""
-        self.current_data_source = name
-        self.total_jobs = total
-        self.pending_jobs = pending
-        # Reset completed/failed for this data source display
-        self.completed_jobs = total - pending
-        self.failed_jobs = 0
-        # Reset all worker states to IDLE for the new data source
-        for ws in self.workers.values():
-            ws.status = WorkerStatus.IDLE
-            ws.current_job_id = None
-            ws.job_start_time = None
+    @property
+    def total_jobs(self) -> int:
+        """Total jobs across all registered sources."""
+        return sum(s.total for s in self._sources.values())
+
+    @property
+    def completed_jobs(self) -> int:
+        """Completed jobs across all sources."""
+        return sum(s.completed for s in self._sources.values())
+
+    @property
+    def failed_jobs(self) -> int:
+        """Failed jobs across all sources."""
+        return sum(s.failed for s in self._sources.values())
+
+    @property
+    def pending_jobs(self) -> int:
+        """Pending jobs across all sources."""
+        return sum(s.pending for s in self._sources.values())
+
+    def register_sources(self, sources: dict[str, int]) -> None:
+        """Register all data sources with their total job counts upfront.
+
+        Args:
+            sources: Mapping of data source name to total job count,
+                ordered as in the config.
+        """
+        self._source_order = list(sources.keys())
+        self._sources = {
+            name: SourceProgress(total=count) for name, count in sources.items()
+        }
 
     def mark_worker_idle(self, worker_id: str) -> None:
         """Mark a worker as idle (no current job)."""
@@ -106,18 +138,35 @@ class PipelineProgress:
             ws.current_job_id = None
             ws.job_start_time = None
 
-    def record_job_completed(self, worker_id: str, cost: float) -> None:
-        """Record a job completion: increment completed, add cost."""
-        self.completed_jobs += 1
-        self.pending_jobs = max(0, self.pending_jobs - 1)
+    def record_job_completed(
+        self, worker_id: str, cost: float, data_source: str
+    ) -> None:
+        """Record a job completion: increment completed, add cost.
+
+        Args:
+            worker_id: The worker that completed the job.
+            cost: Cost incurred for this job.
+            data_source: Name of the data source this job belongs to.
+        """
+        if data_source in self._sources:
+            self._sources[data_source].completed += 1
         self.cumulative_cost += cost
         self.mark_worker_idle(worker_id)
 
-    def record_job_failed(self, worker_id: str) -> None:
-        """Record a job failure: increment failed count."""
-        self.failed_jobs += 1
-        self.pending_jobs = max(0, self.pending_jobs - 1)
+    def record_job_failed(self, worker_id: str, data_source: str) -> None:
+        """Record a job failure: increment failed count.
+
+        Args:
+            worker_id: The worker that failed the job.
+            data_source: Name of the data source this job belongs to.
+        """
+        if data_source in self._sources:
+            self._sources[data_source].failed += 1
         self.mark_worker_idle(worker_id)
+
+    def get_source_progress(self, name: str) -> SourceProgress | None:
+        """Get progress for a specific data source."""
+        return self._sources.get(name)
 
 
 def _format_elapsed(seconds: float) -> str:
@@ -131,12 +180,19 @@ def _format_elapsed(seconds: float) -> str:
     return f"{secs}s"
 
 
+def _truncate_name(name: str, max_len: int = _MAX_SOURCE_NAME_LEN) -> str:
+    """Truncate a data source name with '...' if too long."""
+    if len(name) <= max_len:
+        return name
+    return name[: max_len - 3] + "..."
+
+
 def render_dashboard(progress: PipelineProgress) -> Group:
     """Render the progress state into a Rich renderable.
 
     Produces a compact display with:
-    - Header line: data source, elapsed time, cost
-    - Progress bar with job fraction
+    - Header line: "k-extract" branding, elapsed time, cost
+    - N+1 progress bars (Total + per source)
     - Per-worker status rows
     - Summary line: completed, failed, pending counts
 
@@ -152,26 +208,42 @@ def render_dashboard(progress: PipelineProgress) -> Group:
     # Header
     header = Text.assemble(
         ("  ", ""),
-        (progress.current_data_source, "bold cyan"),
+        ("k-extract", "bold cyan"),
         ("  ", ""),
         (f"elapsed: {elapsed}", "dim"),
         ("  ", ""),
         (f"cost: {cost_str}", "dim"),
     )
 
-    # Progress bar
+    # N+1 progress bars
     bar = Progress(
-        TextColumn("  "),
+        TextColumn("  {task.description}"),
         BarColumn(bar_width=30),
         MofNCompleteColumn(),
         TextColumn("jobs"),
         expand=False,
     )
+
+    # Total bar
+    total_completed = progress.completed_jobs + progress.failed_jobs
     bar.add_task(
-        "jobs",
-        total=progress.total_jobs,
-        completed=progress.completed_jobs + progress.failed_jobs,
+        _truncate_name("Total", _MAX_SOURCE_NAME_LEN).ljust(_MAX_SOURCE_NAME_LEN),
+        total=max(progress.total_jobs, 1),
+        completed=total_completed,
     )
+
+    # Per-source bars (in config order)
+    for source_name in progress._source_order:
+        sp = progress._sources[source_name]
+        display_name = _truncate_name(source_name, _MAX_SOURCE_NAME_LEN).ljust(
+            _MAX_SOURCE_NAME_LEN
+        )
+        source_done = sp.completed + sp.failed
+        bar.add_task(
+            display_name,
+            total=max(sp.total, 1),
+            completed=source_done,
+        )
 
     # Worker status table
     worker_table = Table(show_header=False, box=None, padding=(0, 1))
