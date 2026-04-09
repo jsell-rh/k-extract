@@ -104,9 +104,9 @@ class SearchRelationshipsInput(TypedDict):
 
 class ManageEntityInput(TypedDict):
     entity_type: Annotated[str, "PascalCase entity type name"]
-    slug: Annotated[str, "Entity slug to edit"]
-    properties: Annotated[dict[str, Any], "Properties to set (partial update)"]
-    mode: Annotated[str, "Must be 'edit'"]
+    slug: Annotated[str, "Entity slug (format: {type}:{canonical-name})"]
+    properties: Annotated[dict[str, Any], "Properties to set"]
+    mode: Annotated[str, "Either 'create' or 'edit'"]
 
 
 class ManageRelationshipInput(TypedDict):
@@ -370,7 +370,8 @@ def create_extraction_tools(
 
     @tool(
         "manage_entity",
-        "Edit properties on an existing entity instance. Stages the update.",
+        "Create a new entity or edit properties on an existing entity instance."
+        " Stages the update.",
         ManageEntityInput,
     )
     async def manage_entity(args: dict[str, Any]) -> dict[str, Any]:
@@ -379,33 +380,31 @@ def create_extraction_tools(
         properties = args.get("properties")
         mode = args.get("mode", "")
 
-        if mode != "edit":
-            return _err("Mode must be 'edit'.")
+        if mode not in ("create", "edit"):
+            return _err("Mode must be 'create' or 'edit'.")
 
-        # Validate entity type is editable
+        # Validate entity type exists
         type_def = ontology.get_entity_type(entity_type)
         if type_def is None:
             return _err(f"Unknown entity type: {entity_type!r}.")
+
+        # Structural types cannot be created or edited
         if type_def.is_structural:
             return _err(
-                f"Entity type {entity_type!r} is structural and cannot be edited."
+                f"Entity type {entity_type!r} is structural and cannot be modified."
             )
 
         # Validate properties is a non-empty dict
         if not isinstance(properties, dict) or not properties:
             return _err("Properties must be a non-empty object.")
 
-        # Load current instance from virtual ontology
-        current = store.get_entity_by_slug(slug, worker_id=worker_id)
-        if current is None:
-            return _err(f"Entity not found: {slug!r}.")
-
-        # Verify entity type matches
+        # Validate slug format matches {type}:{canonical-name}
         expected_prefix = _pascal_to_kebab(entity_type)
-        if current.entity_type != expected_prefix:
+        slug_prefix = slug.split(":")[0] if ":" in slug else ""
+        if slug_prefix != expected_prefix:
             return _err(
-                f"Entity {slug!r} is of type {current.entity_type!r}, "
-                f"not {expected_prefix!r}."
+                f"Slug {slug!r} must start with {expected_prefix!r}: "
+                f"expected format '{expected_prefix}:{{canonical-name}}'."
             )
 
         # Validate property types against schema
@@ -428,6 +427,54 @@ def create_extraction_tools(
                         return _err("Tags must be an array of strings.")
                     if tag not in allowed:
                         return _err(f"Invalid tag {tag!r}. Allowed: {sorted(allowed)}.")
+
+        if mode == "create":
+            # Validate entity DOES NOT already exist (shared + staged)
+            existing = store.get_entity_by_slug(slug, worker_id=worker_id)
+            if existing is not None:
+                return _err(
+                    f"Entity already exists: {slug!r}. Use mode='edit' to modify."
+                )
+
+            # Validate required properties are present
+            for prop in type_def.required_properties:
+                if prop not in properties:
+                    return _err(
+                        f"Missing required property {prop!r} for "
+                        f"entity type {entity_type!r}."
+                    )
+
+            # Validate slug format via EntityInstance (Pydantic validation)
+            try:
+                new_entity = EntityInstance(slug=slug, properties=dict(properties))
+            except ValueError as exc:
+                return _err(str(exc))
+
+            store.stage_entity(worker_id, new_entity)
+
+            return _ok(
+                json.dumps(
+                    {
+                        "status": "staged",
+                        "mode": "create",
+                        "entity": _entity_to_dict(new_entity, ontology),
+                    },
+                    indent=2,
+                )
+            )
+
+        # Edit mode
+        # Load current instance from virtual ontology
+        current = store.get_entity_by_slug(slug, worker_id=worker_id)
+        if current is None:
+            return _err(f"Entity not found: {slug!r}.")
+
+        # Verify entity type matches
+        if current.entity_type != expected_prefix:
+            return _err(
+                f"Entity {slug!r} is of type {current.entity_type!r}, "
+                f"not {expected_prefix!r}."
+            )
 
         # Deep-copy current, merge properties
         merged_props = copy.deepcopy(dict(current.properties))

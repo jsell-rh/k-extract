@@ -769,7 +769,7 @@ class TestManageEntity:
                 "entity_type": "Product",
                 "slug": "product:item-0",
                 "properties": {"summary": "test"},
-                "mode": "create",
+                "mode": "delete",
             }
         )
         is_error, _ = _parse_result(result)
@@ -921,6 +921,262 @@ class TestManageEntity:
         assert props["title"] == "Item 0"
         assert props["description"] == "Description for item 0"
         assert props["summary"] == "new summary"
+
+
+class TestManageEntityCreate:
+    """manage_entity create mode tests."""
+
+    @pytest.mark.asyncio
+    async def test_create_success(self, manage_entity_fn):
+        result = await manage_entity_fn.handler(
+            {
+                "entity_type": "Product",
+                "slug": "product:new-item",
+                "properties": {
+                    "title": "New Item",
+                    "description": "A brand new item",
+                },
+                "mode": "create",
+            }
+        )
+        is_error, data = _parse_result(result)
+        assert not is_error
+        assert data["status"] == "staged"
+        assert data["mode"] == "create"
+        assert data["entity"]["slug"] == "product:new-item"
+        assert data["entity"]["entity_type"] == "Product"
+        assert data["entity"]["properties"]["title"] == "New Item"
+
+    @pytest.mark.asyncio
+    async def test_create_rejects_duplicate_in_shared(self, manage_entity_fn, store):
+        _seed_products(store, 1)
+        result = await manage_entity_fn.handler(
+            {
+                "entity_type": "Product",
+                "slug": "product:item-0",
+                "properties": {
+                    "title": "Duplicate",
+                    "description": "Already exists",
+                },
+                "mode": "create",
+            }
+        )
+        is_error, _ = _parse_result(result)
+        assert is_error
+
+    @pytest.mark.asyncio
+    async def test_create_rejects_duplicate_in_staging(self, manage_entity_fn):
+        # Create first
+        await manage_entity_fn.handler(
+            {
+                "entity_type": "Product",
+                "slug": "product:staged-item",
+                "properties": {
+                    "title": "Staged",
+                    "description": "First creation",
+                },
+                "mode": "create",
+            }
+        )
+        # Try again
+        result = await manage_entity_fn.handler(
+            {
+                "entity_type": "Product",
+                "slug": "product:staged-item",
+                "properties": {
+                    "title": "Duplicate",
+                    "description": "Second creation",
+                },
+                "mode": "create",
+            }
+        )
+        is_error, _ = _parse_result(result)
+        assert is_error
+
+    @pytest.mark.asyncio
+    async def test_create_validates_slug_format(self, manage_entity_fn):
+        result = await manage_entity_fn.handler(
+            {
+                "entity_type": "Product",
+                "slug": "wrong-prefix:item",
+                "properties": {
+                    "title": "Bad Slug",
+                    "description": "Wrong prefix",
+                },
+                "mode": "create",
+            }
+        )
+        is_error, _ = _parse_result(result)
+        assert is_error
+
+    @pytest.mark.asyncio
+    async def test_create_validates_slug_pydantic(self, manage_entity_fn):
+        result = await manage_entity_fn.handler(
+            {
+                "entity_type": "Product",
+                "slug": "product:UPPERCASE",
+                "properties": {
+                    "title": "Bad Slug",
+                    "description": "Uppercase canonical",
+                },
+                "mode": "create",
+            }
+        )
+        is_error, _ = _parse_result(result)
+        assert is_error
+
+    @pytest.mark.asyncio
+    async def test_create_rejects_structural_type(self, manage_entity_fn):
+        result = await manage_entity_fn.handler(
+            {
+                "entity_type": "DataSource",
+                "slug": "data-source:my-ds",
+                "properties": {"name": "My DS"},
+                "mode": "create",
+            }
+        )
+        is_error, _ = _parse_result(result)
+        assert is_error
+
+    @pytest.mark.asyncio
+    async def test_create_validates_required_properties(self, manage_entity_fn):
+        # Product requires "title" and "description"
+        result = await manage_entity_fn.handler(
+            {
+                "entity_type": "Product",
+                "slug": "product:missing-props",
+                "properties": {"title": "Only Title"},
+                "mode": "create",
+            }
+        )
+        is_error, _ = _parse_result(result)
+        assert is_error
+
+    @pytest.mark.asyncio
+    async def test_create_validates_property_types(self, manage_entity_fn):
+        result = await manage_entity_fn.handler(
+            {
+                "entity_type": "Product",
+                "slug": "product:bad-prop",
+                "properties": {
+                    "title": "Valid",
+                    "description": {"nested": "dict"},
+                },
+                "mode": "create",
+            }
+        )
+        is_error, _ = _parse_result(result)
+        assert is_error
+
+    @pytest.mark.asyncio
+    async def test_create_validates_tags(self, manage_entity_fn):
+        result = await manage_entity_fn.handler(
+            {
+                "entity_type": "Product",
+                "slug": "product:bad-tags",
+                "properties": {
+                    "title": "Valid",
+                    "description": "Valid",
+                    "tags": ["nonexistent-tag"],
+                },
+                "mode": "create",
+            }
+        )
+        is_error, _ = _parse_result(result)
+        assert is_error
+
+    @pytest.mark.asyncio
+    async def test_create_with_valid_tags(self, manage_entity_fn):
+        result = await manage_entity_fn.handler(
+            {
+                "entity_type": "Product",
+                "slug": "product:tagged-new",
+                "properties": {
+                    "title": "Tagged",
+                    "description": "With tags",
+                    "tags": ["frontend"],
+                },
+                "mode": "create",
+            }
+        )
+        is_error, data = _parse_result(result)
+        assert not is_error
+        assert data["entity"]["properties"]["tags"] == ["frontend"]
+
+    @pytest.mark.asyncio
+    async def test_create_empty_properties_rejected(self, manage_entity_fn):
+        result = await manage_entity_fn.handler(
+            {
+                "entity_type": "Product",
+                "slug": "product:empty",
+                "properties": {},
+                "mode": "create",
+            }
+        )
+        is_error, _ = _parse_result(result)
+        assert is_error
+
+    @pytest.mark.asyncio
+    async def test_create_then_commit(
+        self, manage_entity_fn, validate_and_commit_fn, store
+    ):
+        """validate_and_commit successfully commits newly created entities."""
+        # Create a new entity
+        result = await manage_entity_fn.handler(
+            {
+                "entity_type": "Product",
+                "slug": "product:commit-new",
+                "properties": {
+                    "title": "Commit New",
+                    "description": "Testing commit of new entity",
+                    "file_path": "/src/new.py",
+                    "processed_by_agent": True,
+                },
+                "mode": "create",
+            }
+        )
+        is_error, _ = _parse_result(result)
+        assert not is_error
+
+        # Commit
+        result = await validate_and_commit_fn.handler({"job_files": ["/src/new.py"]})
+        is_error, data = _parse_result(result)
+        assert not is_error
+        assert data["status"] == "committed"
+
+        # Verify entity is in shared store
+        entity = store.get_entity_by_slug("product:commit-new")
+        assert entity is not None
+        assert entity.properties["title"] == "Commit New"
+
+    @pytest.mark.asyncio
+    async def test_create_then_edit(self, manage_entity_fn):
+        """Create then edit same entity in same session."""
+        # Create
+        await manage_entity_fn.handler(
+            {
+                "entity_type": "Product",
+                "slug": "product:create-edit",
+                "properties": {
+                    "title": "Original",
+                    "description": "Original desc",
+                },
+                "mode": "create",
+            }
+        )
+        # Edit
+        result = await manage_entity_fn.handler(
+            {
+                "entity_type": "Product",
+                "slug": "product:create-edit",
+                "properties": {"summary": "Added summary"},
+                "mode": "edit",
+            }
+        )
+        is_error, data = _parse_result(result)
+        assert not is_error
+        assert data["entity"]["properties"]["title"] == "Original"
+        assert data["entity"]["properties"]["summary"] == "Added summary"
 
 
 # ================================================================== #
