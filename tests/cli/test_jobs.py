@@ -66,6 +66,7 @@ def _make_job(
     error_message: str | None = None,
     started_at: datetime | None = None,
     completed_at: datetime | None = None,
+    agent_instance_id: str | None = None,
 ) -> Job:
     """Create a Job instance for testing."""
     return Job(
@@ -79,6 +80,7 @@ def _make_job(
         created_at=datetime(2026, 1, 1, tzinfo=UTC),
         started_at=started_at,
         completed_at=completed_at,
+        agent_instance_id=agent_instance_id,
         attempt=attempt,
         error_message=error_message,
     )
@@ -346,6 +348,7 @@ class TestJobDetail:
                     attempt=1,
                     started_at=datetime(2026, 1, 1, 1, 0, 0, tzinfo=UTC),
                     completed_at=datetime(2026, 1, 1, 1, 5, 0, tzinfo=UTC),
+                    agent_instance_id="worker-01",
                 ),
             ],
         )
@@ -362,6 +365,7 @@ class TestJobDetail:
         assert "Files: 3" in result.output
         assert "Total characters: 8000" in result.output
         assert "Attempt: 1" in result.output
+        assert "Agent instance: worker-01" in result.output
         assert "a.py" in result.output
         assert "b.py" in result.output
         assert "c.py" in result.output
@@ -449,6 +453,7 @@ class TestJobDetail:
         )
 
         assert result.exit_code == 0
+        assert "Agent instance: None" in result.output
         assert "Started: None" in result.output
         assert "Completed: None" in result.output
 

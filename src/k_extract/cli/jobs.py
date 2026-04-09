@@ -142,6 +142,7 @@ def _show_job_detail(session: Session, job_id: str) -> None:
     click.echo(f"Files: {job.file_count}")
     click.echo(f"Total characters: {job.total_characters}")
     click.echo(f"Attempt: {job.attempt}")
+    click.echo(f"Agent instance: {job.agent_instance_id}")
     click.echo(f"Created: {job.created_at}")
     click.echo(f"Started: {job.started_at}")
     click.echo(f"Completed: {job.completed_at}")
