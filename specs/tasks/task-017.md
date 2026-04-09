@@ -1,8 +1,8 @@
 # Task 017: Pydantic Settings for Runtime Configuration
 
-**Status:** `not-started`
+**Status:** `in-progress`
 **Spec Reference:** specs/decisions/technology-choices.md (Configuration, Model Configuration)
-**Branch:** (none)
+**Branch:** task-017
 **PR:** (none)
 **Review:** (none)
 
