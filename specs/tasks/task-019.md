@@ -71,3 +71,4 @@ The `k-extract init` command currently prints a static status line (e.g., "Gener
 ## Relevant Commits
 
 - `dcb6808` — feat(task-019): Rich terminal UI with streaming feedback for k-extract init
+- `7a66e06` — fix(task-019): use rich.live.Live for stream_thinking overwriting
