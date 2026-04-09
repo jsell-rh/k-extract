@@ -1,10 +1,10 @@
 # Task 013: CLI Jobs Command — Job Inspection and Error Reporting
 
-**Status:** `ready-for-review`
+**Status:** `needs-revision`
 **Spec Reference:** specs/process/extraction-pipeline.md (Job Inspection, User-Facing Error Reporting)
 **Branch:** task-013
 **PR:** #13
-**Review:** (none)
+**Review:** specs/reviews/task-013.md
 
 ## Description
 
