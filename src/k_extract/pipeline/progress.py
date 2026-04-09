@@ -102,16 +102,32 @@ class PipelineProgress:
         """Pending jobs across all sources."""
         return sum(s.pending for s in self._sources.values())
 
-    def register_sources(self, sources: dict[str, int]) -> None:
+    def register_sources(
+        self,
+        sources: dict[str, int],
+        initial_completed: dict[str, int] | None = None,
+        initial_failed: dict[str, int] | None = None,
+    ) -> None:
         """Register all data sources with their total job counts upfront.
 
         Args:
             sources: Mapping of data source name to total job count,
                 ordered as in the config.
+            initial_completed: Per-source completed counts for resume
+                accuracy. If None, all sources start at 0.
+            initial_failed: Per-source failed counts for resume
+                accuracy. If None, all sources start at 0.
         """
+        completed = initial_completed or {}
+        failed = initial_failed or {}
         self._source_order = list(sources.keys())
         self._sources = {
-            name: SourceProgress(total=count) for name, count in sources.items()
+            name: SourceProgress(
+                total=count,
+                completed=completed.get(name, 0),
+                failed=failed.get(name, 0),
+            )
+            for name, count in sources.items()
         }
 
     def mark_worker_idle(self, worker_id: str) -> None:

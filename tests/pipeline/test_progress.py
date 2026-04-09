@@ -44,6 +44,41 @@ class TestPipelineProgress:
         # Order preserved
         assert progress._source_order == ["alpha", "beta", "gamma"]
 
+    def test_register_sources_with_initial_completed(self) -> None:
+        """register_sources reflects initial completed counts for resume."""
+        progress = PipelineProgress(worker_count=2)
+        progress.register_sources(
+            {"alpha": 100, "beta": 50},
+            initial_completed={"alpha": 80, "beta": 30},
+        )
+
+        assert progress.total_jobs == 150
+        assert progress.completed_jobs == 110
+        assert progress.pending_jobs == 40
+
+        sp_alpha = progress.get_source_progress("alpha")
+        assert sp_alpha is not None
+        assert sp_alpha.completed == 80
+        assert sp_alpha.pending == 20
+
+        sp_beta = progress.get_source_progress("beta")
+        assert sp_beta is not None
+        assert sp_beta.completed == 30
+        assert sp_beta.pending == 20
+
+    def test_register_sources_with_initial_failed(self) -> None:
+        """register_sources reflects initial failed counts for resume."""
+        progress = PipelineProgress(worker_count=1)
+        progress.register_sources(
+            {"src": 50},
+            initial_completed={"src": 30},
+            initial_failed={"src": 5},
+        )
+
+        assert progress.completed_jobs == 30
+        assert progress.failed_jobs == 5
+        assert progress.pending_jobs == 15
+
     def test_register_sources_replaces_previous(self) -> None:
         """Calling register_sources again replaces prior registration."""
         progress = PipelineProgress(worker_count=1)

@@ -1,6 +1,6 @@
 # Task 024: N+1 Progress Bars (Per-Source + Total)
 
-**Status:** `needs-revision`
+**Status:** `ready-for-review`
 **Spec Reference:** specs/process/extraction-pipeline.md
 **Branch:** task-024
 **PR:** #24

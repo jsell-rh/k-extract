@@ -444,8 +444,10 @@ async def run_pipeline(
             or 0
         )
 
-        # Per-source total job counts (ordered as in config)
+        # Per-source total, completed, and failed job counts (ordered as in config)
         per_source_totals: dict[str, int] = {}
+        per_source_completed: dict[str, int] = {}
+        per_source_failed: dict[str, int] = {}
         for ds in config.data_sources:
             count = (
                 session.execute(
@@ -455,6 +457,28 @@ async def run_pipeline(
                 or 0
             )
             per_source_totals[ds.name] = int(count)
+            completed_count = (
+                session.execute(
+                    sa_text(
+                        "SELECT COUNT(*) FROM jobs"
+                        " WHERE data_source = :ds AND status = :status"
+                    ),
+                    {"ds": ds.name, "status": JobStatus.COMPLETED.value},
+                ).scalar()
+                or 0
+            )
+            per_source_completed[ds.name] = int(completed_count)
+            failed_count_ds = (
+                session.execute(
+                    sa_text(
+                        "SELECT COUNT(*) FROM jobs"
+                        " WHERE data_source = :ds AND status = :status"
+                    ),
+                    {"ds": ds.name, "status": JobStatus.FAILED.value},
+                ).scalar()
+                or 0
+            )
+            per_source_failed[ds.name] = int(failed_count_ds)
 
     if console is not None:
         console.print(
@@ -485,7 +509,11 @@ async def run_pipeline(
     live: Live | None = None
     if console is not None:
         progress = PipelineProgress(workers)
-        progress.register_sources(per_source_totals)
+        progress.register_sources(
+            per_source_totals,
+            initial_completed=per_source_completed,
+            initial_failed=per_source_failed,
+        )
         live = Live(
             render_dashboard(progress),
             console=console,
