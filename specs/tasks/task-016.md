@@ -1,6 +1,6 @@
 # Task 016: Runtime Context Window Discovery from Claude Agent SDK
 
-**Status:** `in-progress`
+**Status:** `ready-for-review`
 **Spec Reference:** specs/process/job-lifecycle.md (Section: Batching Strategy)
 **Branch:** task-016
 **PR:** #16
@@ -61,4 +61,4 @@ Reference: specs/process/job-lifecycle.md section "Batching Strategy (k-extract)
 
 ## Relevant Commits
 
-(none yet)
+- `pending` — feat(task-016): runtime context window discovery from Claude Agent SDK

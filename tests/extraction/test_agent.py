@@ -19,11 +19,15 @@ from claude_agent_sdk import (
 )
 
 from k_extract.extraction.agent import (
+    DEFAULT_CONTEXT_WINDOW,
+    DEFAULT_MAX_OUTPUT_TOKENS,
     CumulativeUsage,
+    ModelCapabilities,
     UsageStats,
     _get_int,
     _handle_assistant_message,
     _handle_user_message,
+    discover_model_capabilities,
     format_worker_id,
     run_agent,
 )
@@ -1072,3 +1076,191 @@ class TestRunAgent:
         assert len(lines) == 3
         types = [json.loads(line)["type"] for line in lines]
         assert types == ["assistant_text", "tool_use", "result"]
+
+
+# ------------------------------------------------------------------ #
+# discover_model_capabilities tests
+# ------------------------------------------------------------------ #
+
+
+class TestDiscoverModelCapabilities:
+    @pytest.mark.asyncio
+    async def test_discovers_from_result_message(self) -> None:
+        """Extracts contextWindow and maxOutputTokens from model_usage."""
+        configure_logging(json_output=True)
+
+        result_msg = ResultMessage(
+            subtype="success",
+            duration_ms=100,
+            duration_api_ms=80,
+            is_error=False,
+            num_turns=1,
+            session_id="sess-1",
+            model_usage={
+                "claude-sonnet-4-6@default": {
+                    "contextWindow": 200000,
+                    "maxOutputTokens": 32000,
+                }
+            },
+        )
+
+        async def mock_query(**kwargs: Any) -> Any:
+            yield result_msg
+
+        with patch("k_extract.extraction.agent.query", side_effect=mock_query):
+            caps = await discover_model_capabilities()
+
+        assert caps.context_window == 200000
+        assert caps.max_output_tokens == 32000
+
+    @pytest.mark.asyncio
+    async def test_falls_back_on_no_model_usage(self) -> None:
+        """Returns defaults when model_usage is None."""
+        configure_logging(json_output=True)
+
+        result_msg = ResultMessage(
+            subtype="success",
+            duration_ms=100,
+            duration_api_ms=80,
+            is_error=False,
+            num_turns=1,
+            session_id="sess-1",
+            model_usage=None,
+        )
+
+        async def mock_query(**kwargs: Any) -> Any:
+            yield result_msg
+
+        with patch("k_extract.extraction.agent.query", side_effect=mock_query):
+            caps = await discover_model_capabilities()
+
+        assert caps.context_window == DEFAULT_CONTEXT_WINDOW
+        assert caps.max_output_tokens == DEFAULT_MAX_OUTPUT_TOKENS
+
+    @pytest.mark.asyncio
+    async def test_falls_back_on_empty_model_usage(self) -> None:
+        """Returns defaults when model_usage is an empty dict."""
+        configure_logging(json_output=True)
+
+        result_msg = ResultMessage(
+            subtype="success",
+            duration_ms=100,
+            duration_api_ms=80,
+            is_error=False,
+            num_turns=1,
+            session_id="sess-1",
+            model_usage={},
+        )
+
+        async def mock_query(**kwargs: Any) -> Any:
+            yield result_msg
+
+        with patch("k_extract.extraction.agent.query", side_effect=mock_query):
+            caps = await discover_model_capabilities()
+
+        assert caps.context_window == DEFAULT_CONTEXT_WINDOW
+        assert caps.max_output_tokens == DEFAULT_MAX_OUTPUT_TOKENS
+
+    @pytest.mark.asyncio
+    async def test_falls_back_on_exception(self) -> None:
+        """Returns defaults when SDK query raises an exception."""
+        configure_logging(json_output=True)
+
+        async def mock_query(**kwargs: Any) -> Any:
+            raise ConnectionError("SDK unavailable")
+            yield  # make it a generator  # pragma: no cover
+
+        with patch("k_extract.extraction.agent.query", side_effect=mock_query):
+            caps = await discover_model_capabilities()
+
+        assert caps.context_window == DEFAULT_CONTEXT_WINDOW
+        assert caps.max_output_tokens == DEFAULT_MAX_OUTPUT_TOKENS
+
+    @pytest.mark.asyncio
+    async def test_passes_model_to_options(self) -> None:
+        """Model parameter is forwarded to ClaudeAgentOptions."""
+        configure_logging(json_output=True)
+
+        result_msg = ResultMessage(
+            subtype="success",
+            duration_ms=100,
+            duration_api_ms=80,
+            is_error=False,
+            num_turns=1,
+            session_id="sess-1",
+            model_usage={
+                "claude-opus-4-6@default": {
+                    "contextWindow": 1000000,
+                    "maxOutputTokens": 64000,
+                }
+            },
+        )
+
+        captured_options: list[Any] = []
+
+        async def mock_query(**kwargs: Any) -> Any:
+            captured_options.append(kwargs.get("options"))
+            yield result_msg
+
+        with patch("k_extract.extraction.agent.query", side_effect=mock_query):
+            caps = await discover_model_capabilities(model="claude-opus-4-6")
+
+        assert caps.context_window == 1000000
+        assert caps.max_output_tokens == 64000
+        assert captured_options[0].model == "claude-opus-4-6"
+
+    @pytest.mark.asyncio
+    async def test_uses_first_model_entry(self) -> None:
+        """When model_usage has multiple entries, uses the first one."""
+        configure_logging(json_output=True)
+
+        result_msg = ResultMessage(
+            subtype="success",
+            duration_ms=100,
+            duration_api_ms=80,
+            is_error=False,
+            num_turns=1,
+            session_id="sess-1",
+            model_usage={
+                "claude-sonnet-4-6@default": {
+                    "contextWindow": 200000,
+                    "maxOutputTokens": 32000,
+                },
+            },
+        )
+
+        async def mock_query(**kwargs: Any) -> Any:
+            yield result_msg
+
+        with patch("k_extract.extraction.agent.query", side_effect=mock_query):
+            caps = await discover_model_capabilities()
+
+        assert caps.context_window == 200000
+        assert caps.max_output_tokens == 32000
+
+    @pytest.mark.asyncio
+    async def test_no_result_message_yields_defaults(self) -> None:
+        """Returns defaults when no ResultMessage is yielded."""
+        configure_logging(json_output=True)
+
+        assistant_msg = AssistantMessage(
+            content=[TextBlock(text="OK")],
+            model="test",
+            message_id="msg-1",
+        )
+
+        async def mock_query(**kwargs: Any) -> Any:
+            yield assistant_msg
+
+        with patch("k_extract.extraction.agent.query", side_effect=mock_query):
+            caps = await discover_model_capabilities()
+
+        assert caps.context_window == DEFAULT_CONTEXT_WINDOW
+        assert caps.max_output_tokens == DEFAULT_MAX_OUTPUT_TOKENS
+
+
+class TestModelCapabilities:
+    def test_dataclass_fields(self) -> None:
+        caps = ModelCapabilities(context_window=200000, max_output_tokens=32000)
+        assert caps.context_window == 200000
+        assert caps.max_output_tokens == 32000
