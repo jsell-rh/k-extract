@@ -48,4 +48,4 @@ Reference: specs/concurrency/concurrency-model.md section 6 — "The new system 
 
 ## Relevant Commits
 
-- `pending` — feat(task-014): add --reset and --reset-failed CLI options
+- `f61929a` — feat(task-014): add --reset and --reset-failed CLI options
