@@ -73,4 +73,4 @@ Since all jobs are generated upfront (Task 023) and workers claim from a global 
 
 ## Relevant Commits
 
-(none yet)
+- `45e4d11` — feat(task-024): n+1 progress bars with per-source tracking
