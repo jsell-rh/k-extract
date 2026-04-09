@@ -59,3 +59,4 @@ This is distinct from the YAML-based `ExtractionConfig` (which captures per-proj
 
 - `1f492d9` — chore(task-017): begin implementation
 - `e54bb73` — chore(task-017): add PR number
+- `1f2b3cd` — feat(task-017): add Pydantic Settings for runtime configuration
