@@ -256,6 +256,29 @@ def reset_stale_jobs(session: Session, timeout_minutes: int = 60) -> int:
     return result.rowcount
 
 
+def reset_failed_jobs(session: Session) -> int:
+    """Reset all failed jobs to pending for retry.
+
+    Clears error_message, started_at, completed_at, and agent_instance_id.
+    Preserves attempt counter.
+    """
+    result: CursorResult = session.execute(  # type: ignore[assignment]
+        text(
+            "UPDATE jobs "
+            "SET status = :pending, started_at = NULL, "
+            "completed_at = NULL, error_message = NULL, "
+            "agent_instance_id = NULL "
+            "WHERE status = :failed"
+        ),
+        {
+            "pending": JobStatus.PENDING.value,
+            "failed": JobStatus.FAILED.value,
+        },
+    )
+    session.commit()
+    return result.rowcount
+
+
 def reset_all_in_progress(session: Session) -> int:
     """Reset all in_progress jobs to pending (startup reset).
 

@@ -44,7 +44,8 @@ from k_extract.pipeline.jobs import (
     FileInfo,
     compute_available_tokens,
     create_jobs,
-    reset_stale_jobs,
+    reset_all_in_progress,
+    reset_failed_jobs,
 )
 from k_extract.pipeline.sources import discover_files
 from k_extract.pipeline.worker import WorkerResult, worker_loop
@@ -217,16 +218,22 @@ async def run_pipeline(
                 session, current_fingerprint, config_hash, DEFAULT_MODEL_ID
             )
         else:
-            # Resume: reset stale in_progress jobs
-            stale_count = reset_stale_jobs(session)
+            # Resume: unconditionally reset all in_progress jobs (startup reset)
+            stale_count = reset_all_in_progress(session)
             if stale_count > 0:
                 log.info("pipeline.stale_jobs_reset", count=stale_count)
+            # Reset failed jobs to pending for retry
+            failed_count = reset_failed_jobs(session)
+            if failed_count > 0:
+                log.info("pipeline.failed_jobs_reset", count=failed_count)
 
     # 8. Create ontology store
     ontology_engine = create_engine_with_wal(effective_db_path)
     store = OntologyStore(ontology_engine, ontology)
 
     # 9. Emit DEFINE operations (only on fresh start)
+    if is_fresh and output_path.exists():
+        output_path.unlink()
     writer = JsonlWriter(output_path)
     if is_fresh:
         defines = generate_defines(config.ontology)
@@ -268,10 +275,12 @@ async def run_pipeline(
 
             start_order = 0
             with session_factory() as session:
-                max_order = session.execute(
+                max_order_result = session.execute(
                     sa_text('SELECT COALESCE(MAX("order"), -1) FROM jobs')
                 ).scalar()
-                start_order = (max_order or -1) + 1
+                # COALESCE guarantees non-null; cast for type checker
+                max_order: int = int(max_order_result)  # type: ignore[arg-type]
+                start_order = max_order + 1
 
             jobs = create_jobs(file_infos, ds.name, available_tokens, start_order)
             with session_factory() as session:

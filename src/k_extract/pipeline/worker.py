@@ -97,6 +97,11 @@ async def worker_loop(
         if job is None:
             break
 
+        # Increment shared counter immediately after claiming (before await)
+        # to prevent other workers from exceeding the cap
+        if shared_counter is not None:
+            shared_counter[0] += 1
+
         log.info(
             "extraction.job_claimed",
             job_id=job.job_id,
@@ -133,8 +138,6 @@ async def worker_loop(
         )
 
         result.jobs_processed += 1
-        if shared_counter is not None:
-            shared_counter[0] += 1
         result.cumulative_usage.add(agent_result.usage)
 
         if agent_result.success:

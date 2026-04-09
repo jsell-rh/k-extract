@@ -499,6 +499,132 @@ class TestRunPipeline:
         assert result.failed_job_details[0][1] == "Agent error"
 
     @pytest.mark.asyncio
+    async def test_force_clears_output_file(self, tmp_path: Path) -> None:
+        """--force deletes the old output file before writing new DEFINEs."""
+        config_path, source_dir = _make_config(tmp_path)
+
+        mock_agent_result = AgentResult(
+            success=True,
+            error_message=None,
+            usage=UsageStats(),
+        )
+
+        # First run
+        with (
+            patch(
+                "k_extract.pipeline.worker.run_agent",
+                new_callable=AsyncMock,
+                return_value=mock_agent_result,
+            ),
+            patch(
+                "k_extract.pipeline.worker.create_tool_server",
+                return_value=None,
+            ),
+        ):
+            result1 = await run_pipeline(
+                config_path=config_path,
+                workers=1,
+                db_path=str(tmp_path / "test.db"),
+            )
+
+        output_path = Path(result1.output_file)
+        lines_after_first = output_path.read_text().strip().split("\n")
+
+        # Second run with --force — output should be clean (no stale data)
+        with (
+            patch(
+                "k_extract.pipeline.worker.run_agent",
+                new_callable=AsyncMock,
+                return_value=mock_agent_result,
+            ),
+            patch(
+                "k_extract.pipeline.worker.create_tool_server",
+                return_value=None,
+            ),
+        ):
+            await run_pipeline(
+                config_path=config_path,
+                workers=1,
+                force=True,
+                db_path=str(tmp_path / "test.db"),
+            )
+
+        # Output should only contain lines from the second run
+        lines_after_second = output_path.read_text().strip().split("\n")
+        # The number of lines should be roughly the same as the first run,
+        # NOT doubled (which would happen if old output persisted)
+        assert len(lines_after_second) <= len(lines_after_first) + 1
+
+        # All DEFINEs should appear before CREATEs
+        define_indices = []
+        create_indices = []
+        for i, line in enumerate(lines_after_second):
+            parsed = json.loads(line)
+            if parsed.get("op") == "DEFINE":
+                define_indices.append(i)
+            elif parsed.get("op") == "CREATE":
+                create_indices.append(i)
+        if define_indices and create_indices:
+            assert max(define_indices) < min(create_indices)
+
+    @pytest.mark.asyncio
+    async def test_rerun_retries_failed_jobs(self, tmp_path: Path) -> None:
+        """Re-running retries previously failed jobs."""
+        config_path, source_dir = _make_config(tmp_path)
+
+        # First run: agent fails
+        mock_fail = AgentResult(
+            success=False,
+            error_message="Temporary error",
+            usage=UsageStats(),
+        )
+        with (
+            patch(
+                "k_extract.pipeline.worker.run_agent",
+                new_callable=AsyncMock,
+                return_value=mock_fail,
+            ),
+            patch(
+                "k_extract.pipeline.worker.create_tool_server",
+                return_value=None,
+            ),
+        ):
+            result1 = await run_pipeline(
+                config_path=config_path,
+                workers=1,
+                db_path=str(tmp_path / "test.db"),
+            )
+        assert result1.failed_jobs >= 1
+
+        # Second run (resume): agent succeeds — should retry the failed job
+        mock_success = AgentResult(
+            success=True,
+            error_message=None,
+            usage=UsageStats(),
+        )
+        with (
+            patch(
+                "k_extract.pipeline.worker.run_agent",
+                new_callable=AsyncMock,
+                return_value=mock_success,
+            ) as mock_run,
+            patch(
+                "k_extract.pipeline.worker.create_tool_server",
+                return_value=None,
+            ),
+        ):
+            result2 = await run_pipeline(
+                config_path=config_path,
+                workers=1,
+                db_path=str(tmp_path / "test.db"),
+            )
+
+        # Agent should have been called (the failed job was retried)
+        assert mock_run.call_count >= 1
+        assert result2.completed_jobs >= 1
+        assert result2.failed_jobs == 0
+
+    @pytest.mark.asyncio
     async def test_hard_stop_on_changed_environment(self, tmp_path: Path) -> None:
         """Changed environment triggers hard stop."""
         config_path, source_dir = _make_config(tmp_path)
