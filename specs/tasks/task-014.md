@@ -3,7 +3,7 @@
 **Status:** `in-progress`
 **Spec Reference:** specs/concurrency/concurrency-model.md (Section 6: Stale Lock / Stale Job Detection and Recovery)
 **Branch:** task-014
-**PR:** (none)
+**PR:** #14
 **Review:** (none)
 
 ## Description
