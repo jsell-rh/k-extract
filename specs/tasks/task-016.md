@@ -1,6 +1,6 @@
 # Task 016: Runtime Context Window Discovery from Claude Agent SDK
 
-**Status:** `ready-for-review`
+**Status:** `complete`
 **Spec Reference:** specs/process/job-lifecycle.md (Section: Batching Strategy)
 **Branch:** task-016
 **PR:** #16
@@ -63,3 +63,4 @@ Reference: specs/process/job-lifecycle.md section "Batching Strategy (k-extract)
 
 - `301c1c6` — feat(task-016): runtime context window discovery from Claude Agent SDK
 - `8269e8d` — fix(task-016): add caching to discover_model_capabilities and use distinct test values
+- Merged via PR #16
