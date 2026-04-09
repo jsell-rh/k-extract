@@ -3,7 +3,7 @@
 **Status:** `in-progress`
 **Spec Reference:** specs/agent/agent-tools.md, specs/process/output-format.md
 **Branch:** task-022
-**PR:** (none)
+**PR:** #22
 **Review:** (none)
 
 ## Description
