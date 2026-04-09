@@ -1,8 +1,8 @@
 # Task 019: Rich Terminal UI — Streaming Feedback for `k-extract init`
 
-**Status:** `not-started`
+**Status:** `in-progress`
 **Spec Reference:** specs/process/guided-session.md
-**Branch:** (none)
+**Branch:** task-019
 **PR:** (none)
 **Review:** (none)
 
