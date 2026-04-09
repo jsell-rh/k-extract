@@ -3,7 +3,7 @@
 **Status:** `in-progress`
 **Spec Reference:** specs/process/extraction-pipeline.md
 **Branch:** task-024
-**PR:** (none)
+**PR:** #24
 **Review:** (none)
 
 ## Description
