@@ -6,6 +6,7 @@ Implements the agent infrastructure from specs/agent/agent-architecture.md:
 - Usage tracking (4 token types, cost, per-job and cumulative)
 - Conversation logging to per-worker JSONL files (opt-in)
 - Error handling for SDK exceptions, error subtypes, and tool failures
+- Runtime model capability discovery (contextWindow, maxOutputTokens)
 """
 
 from __future__ import annotations
@@ -23,10 +24,102 @@ from claude_agent_sdk import (
     ToolResultBlock,
     ToolUseBlock,
     UserMessage,
+    query,
 )
 
 from k_extract.extraction.hooks import create_hooks
 from k_extract.extraction.logging import ConversationLogger, get_logger
+
+# Default fallback values if discovery fails
+DEFAULT_CONTEXT_WINDOW = 200_000
+DEFAULT_MAX_OUTPUT_TOKENS = 50_000
+
+# Module-level cache for discovered model capabilities
+_cached_capabilities: ModelCapabilities | None = None
+
+
+@dataclass
+class ModelCapabilities:
+    """Context window and output token limits discovered from the Claude Agent SDK."""
+
+    context_window: int
+    max_output_tokens: int
+
+
+async def discover_model_capabilities(
+    *,
+    model: str | None = None,
+) -> ModelCapabilities:
+    """Discover model context window and max output tokens via a lightweight SDK query.
+
+    Makes a minimal agent query ("Respond with OK") to obtain
+    ``ResultMessage.model_usage``, which contains ``contextWindow`` and
+    ``maxOutputTokens`` for the active model.
+
+    Results are cached at module level so repeated calls reuse the first
+    successful discovery without additional API roundtrips.
+
+    Falls back to default values if discovery fails (SDK unavailable,
+    no model_usage in response, etc.).
+
+    Args:
+        model: Optional model ID override.
+
+    Returns:
+        ModelCapabilities with discovered or default values.
+    """
+    global _cached_capabilities
+
+    if _cached_capabilities is not None:
+        return _cached_capabilities
+
+    log = get_logger()
+    try:
+        options = ClaudeAgentOptions(
+            permission_mode="bypassPermissions",
+            max_turns=1,
+        )
+        if model is not None:
+            options.model = model
+
+        async for message in query(prompt="Respond with OK", options=options):
+            if isinstance(message, ResultMessage) and message.model_usage:
+                # model_usage is dict[str, dict] keyed by model name
+                for _model_name, caps in message.model_usage.items():
+                    context_window = (
+                        caps.get("contextWindow") if isinstance(caps, dict) else None
+                    )
+                    max_output = (
+                        caps.get("maxOutputTokens") if isinstance(caps, dict) else None
+                    )
+                    if isinstance(context_window, int) and isinstance(max_output, int):
+                        log.info(
+                            "extraction.model_discovered",
+                            context_window=context_window,
+                            max_output_tokens=max_output,
+                        )
+                        result = ModelCapabilities(
+                            context_window=context_window,
+                            max_output_tokens=max_output,
+                        )
+                        _cached_capabilities = result
+                        return result
+
+        log.warning(
+            "extraction.model_discovery_no_usage",
+            msg="No model_usage in response, using defaults",
+        )
+    except Exception as exc:
+        log.warning(
+            "extraction.model_discovery_failed",
+            error=str(exc),
+            msg="Using default context window parameters",
+        )
+
+    return ModelCapabilities(
+        context_window=DEFAULT_CONTEXT_WINDOW,
+        max_output_tokens=DEFAULT_MAX_OUTPUT_TOKENS,
+    )
 
 
 @dataclass

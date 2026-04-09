@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -30,7 +31,7 @@ from k_extract.domain.ontology import (
     Tier,
 )
 from k_extract.domain.relationships import RelationshipInstance
-from k_extract.extraction.agent import AgentResult, UsageStats
+from k_extract.extraction.agent import AgentResult, ModelCapabilities, UsageStats
 from k_extract.pipeline.defines import generate_creates
 from k_extract.pipeline.orchestrator import (
     build_ontology_from_config,
@@ -279,6 +280,22 @@ class TestGenerateCreates:
 
 
 class TestRunPipeline:
+    @pytest.fixture(autouse=True)
+    def _mock_discovery(self) -> Any:
+        """Mock model discovery for all pipeline tests.
+
+        Uses values deliberately different from the old hardcoded defaults
+        (CONTEXT_WINDOW=200_000, OUTPUT_RESERVATION=50_000) so tests verify
+        that batching actually uses the discovered values.
+        """
+        caps = ModelCapabilities(context_window=150_000, max_output_tokens=42_000)
+        with patch(
+            "k_extract.pipeline.orchestrator.discover_model_capabilities",
+            new_callable=AsyncMock,
+            return_value=caps,
+        ):
+            yield
+
     @pytest.mark.asyncio
     async def test_fresh_run_emits_defines_and_processes_jobs(
         self, tmp_path: Path

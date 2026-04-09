@@ -25,6 +25,7 @@ from k_extract.domain.ontology import (
     RelationshipTypeDefinition,
     Tier,
 )
+from k_extract.extraction.agent import discover_model_capabilities
 from k_extract.extraction.logging import get_logger
 from k_extract.extraction.store import OntologyStore
 from k_extract.pipeline.database import (
@@ -52,9 +53,6 @@ from k_extract.pipeline.sources import discover_files
 from k_extract.pipeline.worker import WorkerResult, worker_loop
 from k_extract.pipeline.writer import JsonlWriter
 
-# Default context window budget parameters
-CONTEXT_WINDOW = 200_000
-OUTPUT_RESERVATION = 50_000
 SAFETY_MARGIN = 5_000
 DEFAULT_WORKERS = 3
 DEFAULT_MODEL_ID = "default"
@@ -165,10 +163,20 @@ async def run_pipeline(
     engine = create_engine_with_wal(effective_db_path)
     session_factory = create_session_factory(engine)
 
-    # 4. Build domain ontology from config
+    # 4. Discover model capabilities (context window, max output tokens)
+    model_caps = await discover_model_capabilities()
+    context_window = model_caps.context_window
+    output_reservation = model_caps.max_output_tokens
+    log.info(
+        "pipeline.model_capabilities",
+        context_window=context_window,
+        output_reservation=output_reservation,
+    )
+
+    # 5. Build domain ontology from config
     ontology = build_ontology_from_config(config.ontology)
 
-    # 5. Compute environment fingerprint
+    # 6. Compute environment fingerprint
     all_source_files: list[str] = []
     for ds in config.data_sources:
         ds_path = Path(ds.path)
@@ -192,7 +200,7 @@ async def run_pipeline(
         file_hashes=file_hashes,
     )
 
-    # 6. Evaluate resume decision
+    # 7. Evaluate resume decision
     with session_factory() as session:
         decision = evaluate_resume(session, current_fingerprint, force=force)
 
@@ -207,11 +215,11 @@ async def run_pipeline(
 
     is_fresh = decision.action == ResumeAction.FRESH_START
 
-    # 7. Create ontology store (before fresh-start handling so tables exist)
+    # 8. Create ontology store (before fresh-start handling so tables exist)
     ontology_engine = create_engine_with_wal(effective_db_path)
     store = OntologyStore(ontology_engine, ontology)
 
-    # 8. Handle fresh start vs resume
+    # 9. Handle fresh start vs resume
     with session_factory() as session:
         if is_fresh:
             # Delete all existing jobs
@@ -236,7 +244,7 @@ async def run_pipeline(
             if failed_count > 0:
                 log.info("pipeline.failed_jobs_reset", count=failed_count)
 
-    # 9. Emit DEFINE operations (only on fresh start)
+    # 10. Emit DEFINE operations (only on fresh start)
     if is_fresh and output_path.exists():
         output_path.unlink()
     writer = JsonlWriter(output_path)
@@ -245,13 +253,13 @@ async def run_pipeline(
         await writer.write_operations(defines)
         log.info("pipeline.defines_emitted", count=len(defines))
 
-    # 10. Set up conversation logging directory
+    # 11. Set up conversation logging directory
     conversation_log_dir: Path | None = None
     if log_conversations:
         conversation_log_dir = Path("logs") / "conversations"
         conversation_log_dir.mkdir(parents=True, exist_ok=True)
 
-    # 11. Process data sources in configured order
+    # 12. Process data sources in configured order
     jobs_processed_total = 0
     cumulative_cost = 0.0
     all_failed_details: list[tuple[str, str]] = []
@@ -265,7 +273,7 @@ async def run_pipeline(
     ) // CHARS_PER_TOKEN
 
     available_tokens = compute_available_tokens(
-        CONTEXT_WINDOW, prompt_overhead, OUTPUT_RESERVATION, SAFETY_MARGIN
+        context_window, prompt_overhead, output_reservation, SAFETY_MARGIN
     )
 
     for ds in config.data_sources:
@@ -417,7 +425,7 @@ async def run_pipeline(
             failed=sum(wr.jobs_failed for wr in worker_results),
         )
 
-    # 12. Build final result
+    # 13. Build final result
     result.total_jobs = total_jobs
     result.completed_jobs = total_completed
     result.failed_jobs = total_failed
