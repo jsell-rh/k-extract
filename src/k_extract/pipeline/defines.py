@@ -17,7 +17,7 @@ from k_extract.domain.mutations import (
     generate_edge_id,
     generate_node_id,
 )
-from k_extract.domain.ontology import Ontology, _pascal_to_kebab
+from k_extract.domain.ontology import Ontology
 from k_extract.domain.relationships import RelationshipInstance
 
 TENANT_ID = "default"
@@ -79,7 +79,7 @@ def generate_creates(
     for entity in entities:
         type_def = ontology.find_entity_type_for_slug(entity.slug)
         entity_type_name = type_def.type if type_def else entity.entity_type
-        type_lower = _pascal_to_kebab(entity_type_name)
+        type_lower = entity_type_name.lower()
 
         set_properties = dict(entity.properties)
         set_properties["slug"] = entity.slug
@@ -99,8 +99,8 @@ def generate_creates(
         )
 
     for rel in relationships:
-        source_type_lower = _pascal_to_kebab(rel.source_entity_type)
-        target_type_lower = _pascal_to_kebab(rel.target_entity_type)
+        source_type_lower = rel.source_entity_type.lower()
+        target_type_lower = rel.target_entity_type.lower()
         start_id = generate_node_id(TENANT_ID, source_type_lower, rel.source_slug)
         end_id = generate_node_id(TENANT_ID, target_type_lower, rel.target_slug)
 
