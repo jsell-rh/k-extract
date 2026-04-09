@@ -2,18 +2,12 @@
 
 Extract knowledge graphs from any codebase or documentation. Point it at your repos, describe what you're trying to understand, and get a graph out.
 
-## Install
-
-```bash
-pip install k-extract
-```
-
 ## Quick Start
 
 ### 1. Define what to extract
 
 ```bash
-k-extract init ./my-repo ./another-repo
+uvx k-extract init ./my-repo ./another-repo
 ```
 
 This walks you through:
@@ -26,7 +20,7 @@ Produces `extraction.yaml` — your complete extraction config.
 ### 2. Run the extraction
 
 ```bash
-k-extract run --config extraction.yaml
+uvx k-extract run --config extraction.yaml
 ```
 
 Outputs `graph.jsonl`. Ctrl-C anytime — re-run to resume where you left off.
@@ -37,7 +31,7 @@ The output is [kartograph](https://github.com/jsell-rh/kartograph)-compatible JS
 
 ## Requirements
 
-- Python 3.12+
+- [uv](https://docs.astral.sh/uv/) (or Python 3.12+ with `pip install k-extract`)
 - An Anthropic API key (or Vertex AI credentials) — set via environment variables
 - Model configured via environment (e.g., `ANTHROPIC_MODEL=claude-sonnet-4-6`)
 
@@ -56,11 +50,11 @@ Edit any field, re-run. Changing the config invalidates previous results — use
 ## CLI Reference
 
 ```
-k-extract init <path> [<path> ...]   # Interactive ontology design
-k-extract run --config <yaml>        # Run extraction (resumes by default)
-k-extract run --config <yaml> --force  # Discard previous results, start fresh
-k-extract jobs --config <yaml>       # Inspect job state
-k-extract jobs --config <yaml> --status failed  # See failed jobs
+uvx k-extract init <path> [<path> ...]           # Interactive ontology design
+uvx k-extract run --config <yaml>                # Run extraction (resumes by default)
+uvx k-extract run --config <yaml> --force        # Discard previous results, start fresh
+uvx k-extract jobs --config <yaml>               # Inspect job state
+uvx k-extract jobs --config <yaml> --status failed  # See failed jobs
 ```
 
 ## How It Works
