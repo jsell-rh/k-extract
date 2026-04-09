@@ -1,8 +1,8 @@
 # Task 024: N+1 Progress Bars (Per-Source + Total)
 
-**Status:** `not-started`
+**Status:** `in-progress`
 **Spec Reference:** specs/process/extraction-pipeline.md
-**Branch:** (none)
+**Branch:** task-024
 **PR:** (none)
 **Review:** (none)
 
