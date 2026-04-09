@@ -17,6 +17,7 @@ from sqlalchemy import text as sa_text
 
 from k_extract.config.loader import load_config
 from k_extract.config.schema import OntologyConfig
+from k_extract.config.settings import get_settings
 from k_extract.domain.ontology import (
     EntityTypeDefinition,
     Ontology,
@@ -55,7 +56,6 @@ from k_extract.pipeline.writer import JsonlWriter
 
 SAFETY_MARGIN = 5_000
 DEFAULT_WORKERS = 3
-DEFAULT_MODEL_ID = "default"
 
 
 @dataclass
@@ -149,6 +149,7 @@ async def run_pipeline(
     """
     log = get_logger()
     result = PipelineResult()
+    settings = get_settings()
 
     # 1. Load and validate config
     config = load_config(config_path)
@@ -164,7 +165,7 @@ async def run_pipeline(
     session_factory = create_session_factory(engine)
 
     # 4. Discover model capabilities (context window, max output tokens)
-    model_caps = await discover_model_capabilities()
+    model_caps = await discover_model_capabilities(model=settings.model_id)
     context_window = model_caps.context_window
     output_reservation = model_caps.max_output_tokens
     log.info(
@@ -196,7 +197,7 @@ async def run_pipeline(
     current_fingerprint = compute_fingerprint(
         config_contents=config_contents,
         prompt_templates=prompt_templates,
-        model_id=DEFAULT_MODEL_ID,
+        model_id=settings.model_id,
         file_hashes=file_hashes,
     )
 
@@ -232,7 +233,7 @@ async def run_pipeline(
             session.commit()
             # Store new fingerprint
             store_fingerprint(
-                session, current_fingerprint, config_hash, DEFAULT_MODEL_ID
+                session, current_fingerprint, config_hash, settings.model_id
             )
         else:
             # Resume: unconditionally reset all in_progress jobs (startup reset)
@@ -394,6 +395,7 @@ async def run_pipeline(
                     conversation_log_dir=conversation_log_dir,
                     max_jobs=source_max,
                     shared_counter=shared_counter,
+                    model_id=settings.model_id,
                 )
             )
 

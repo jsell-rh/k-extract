@@ -54,6 +54,7 @@ async def worker_loop(
     conversation_log_dir: Path | None = None,
     max_jobs: int | None = None,
     shared_counter: list[int] | None = None,
+    model_id: str | None = None,
 ) -> WorkerResult:
     """Run the worker loop: claim, process, record.
 
@@ -75,6 +76,7 @@ async def worker_loop(
         shared_counter: If provided, a single-element list [count] shared
             across workers for global max_jobs enforcement. Since asyncio
             is single-threaded, no lock is needed.
+        model_id: Model ID to pass to run_agent. None uses SDK default.
 
     Returns:
         WorkerResult with aggregated stats.
@@ -136,6 +138,7 @@ async def worker_loop(
                 data_source=data_source,
                 cwd=str(source_path),
                 conversation_log_dir=conversation_log_dir,
+                model=model_id,
             )
 
             result.jobs_processed += 1

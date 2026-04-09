@@ -1,9 +1,9 @@
 # Task 017: Pydantic Settings for Runtime Configuration
 
-**Status:** `not-started`
+**Status:** `complete`
 **Spec Reference:** specs/decisions/technology-choices.md (Configuration, Model Configuration)
-**Branch:** (none)
-**PR:** (none)
+**Branch:** task-017
+**PR:** #17
 **Review:** (none)
 
 ## Description
@@ -57,4 +57,7 @@ This is distinct from the YAML-based `ExtractionConfig` (which captures per-proj
 
 ## Relevant Commits
 
-(none yet)
+- `1f492d9` — chore(task-017): begin implementation
+- `e54bb73` — chore(task-017): add PR number
+- `1f2b3cd` — feat(task-017): add Pydantic Settings for runtime configuration
+- Merged via PR #17
