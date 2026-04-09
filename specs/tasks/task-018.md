@@ -70,3 +70,4 @@ Existing tests in `tests/pipeline/test_orchestrator.py` mock `discover_model_cap
 
 - `37d029e` — chore(task-018): begin implementation
 - `239b12e` — chore(task-018): add PR number
+- `ce0395c` — feat(task-018): add e2e integration test for full pipeline
