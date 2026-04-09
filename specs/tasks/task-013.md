@@ -1,6 +1,6 @@
 # Task 013: CLI Jobs Command — Job Inspection and Error Reporting
 
-**Status:** `in-progress`
+**Status:** `ready-for-review`
 **Spec Reference:** specs/process/extraction-pipeline.md (Job Inspection, User-Facing Error Reporting)
 **Branch:** task-013
 **PR:** #13
@@ -52,5 +52,3 @@ Reference: specs/process/extraction-pipeline.md sections on Job Inspection and U
 - [ ] Tests for all display modes
 
 ## Relevant Commits
-
-(none yet)

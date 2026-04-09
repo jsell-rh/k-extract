@@ -1,6 +1,7 @@
 import click
 
 from k_extract.cli.init import init as init_command
+from k_extract.cli.jobs import jobs as jobs_command
 from k_extract.cli.run import run as run_command
 
 
@@ -10,4 +11,5 @@ def main() -> None:
 
 
 main.add_command(init_command)
+main.add_command(jobs_command)
 main.add_command(run_command)
