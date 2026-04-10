@@ -233,7 +233,7 @@ def render_dashboard(progress: PipelineProgress) -> Group:
 
     # Total progress bar (visually distinct — full block chars, bold white)
     total_bar = Progress(
-        TextColumn("  {task.description}"),
+        TextColumn("  {task.description}", style="bold"),
         BarColumn(
             bar_width=30,
             complete_style="bold white",
