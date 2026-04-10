@@ -231,31 +231,41 @@ def render_dashboard(progress: PipelineProgress) -> Group:
         (f"cost: {cost_str}", "dim"),
     )
 
-    # N+1 progress bars
-    bar = Progress(
+    # Total progress bar (visually distinct — full block chars, bold white)
+    total_bar = Progress(
+        TextColumn("  {task.description}"),
+        BarColumn(
+            bar_width=30,
+            complete_style="bold white",
+            finished_style="bold green",
+            pulse_style="bold white",
+        ),
+        MofNCompleteColumn(),
+        TextColumn("jobs"),
+        expand=False,
+    )
+    total_completed = progress.completed_jobs + progress.failed_jobs
+    total_bar.add_task(
+        _truncate_name("Total", _MAX_SOURCE_NAME_LEN).ljust(_MAX_SOURCE_NAME_LEN),
+        total=max(progress.total_jobs, 1),
+        completed=total_completed,
+    )
+
+    # Per-source progress bars
+    source_bar = Progress(
         TextColumn("  {task.description}"),
         BarColumn(bar_width=30),
         MofNCompleteColumn(),
         TextColumn("jobs"),
         expand=False,
     )
-
-    # Total bar
-    total_completed = progress.completed_jobs + progress.failed_jobs
-    bar.add_task(
-        _truncate_name("Total", _MAX_SOURCE_NAME_LEN).ljust(_MAX_SOURCE_NAME_LEN),
-        total=max(progress.total_jobs, 1),
-        completed=total_completed,
-    )
-
-    # Per-source bars (in config order)
     for source_name in progress._source_order:
         sp = progress._sources[source_name]
         display_name = _truncate_name(source_name, _MAX_SOURCE_NAME_LEN).ljust(
             _MAX_SOURCE_NAME_LEN
         )
         source_done = sp.completed + sp.failed
-        bar.add_task(
+        source_bar.add_task(
             display_name,
             total=max(sp.total, 1),
             completed=source_done,
@@ -271,7 +281,9 @@ def render_dashboard(progress: PipelineProgress) -> Group:
         label = f"  worker-{wid}:"
         if ws.status == WorkerStatus.PROCESSING:
             elapsed_job = ws.elapsed_job_seconds
-            time_str = f"({int(elapsed_job)}s)" if elapsed_job is not None else ""
+            time_str = (
+                f"({_format_elapsed(elapsed_job)})" if elapsed_job is not None else ""
+            )
             status_text = Text.assemble(
                 ("processing ", "yellow"),
                 (ws.current_job_id or "", ""),
@@ -293,4 +305,4 @@ def render_dashboard(progress: PipelineProgress) -> Group:
         (str(progress.pending_jobs), "dim"),
     )
 
-    return Group(header, bar, worker_table, summary)
+    return Group(header, total_bar, source_bar, worker_table, summary)
