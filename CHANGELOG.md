@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v0.6.0 (2026-04-10)
+
+### Features
+
+- **task-025**: Enforce referential integrity — no orphaned edges
+  ([`66aab70`](https://github.com/jsell-rh/k-extract/commit/66aab70535a51361baa006d533551d11205f36f7))
+
+
 ## v0.5.0 (2026-04-10)
 
 ### Bug Fixes
