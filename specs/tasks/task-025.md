@@ -1,9 +1,9 @@
 # Task 025: Enforce referential integrity — no orphaned edges
 
-**Status:** `not-started`
+**Status:** `complete`
 **Spec Reference:** specs/agent/agent-tools.md, specs/agent/prompt-generation.md, specs/agent/prompt-patterns.md
-**Branch:** (none)
-**PR:** (none)
+**Branch:** task-025
+**PR:** #25
 **Review:** (none)
 
 ## Description
@@ -40,4 +40,4 @@ This should be added to the Quality Rules section of `src/k_extract/extraction/t
 
 ## Relevant Commits
 
-(none yet)
+- Merged via PR #25

@@ -136,6 +136,12 @@ class TestSystemPromptTemplate:
         assert "consistent slug" in template
         assert "one at a time" in template
 
+    def test_has_stub_entity_instructions(self) -> None:
+        template = load_template("system_prompt.txt")
+        assert "stub entity" in template.lower()
+        assert "ensure both the source and target entities exist" in template
+        assert "reject relationships with missing endpoints" in template
+
     def test_has_completion_section(self) -> None:
         template = load_template("system_prompt.txt")
         assert "# Completion" in template

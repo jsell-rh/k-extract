@@ -538,11 +538,17 @@ def create_extraction_tools(
         # Resolve source and target entity types from slugs
         source_entity = store.get_entity_by_slug(source_slug, worker_id=worker_id)
         if source_entity is None:
-            return _err(f"Source entity not found: {source_slug!r}.")
+            return _err(
+                f"Source entity not found: {source_slug!r}. "
+                f"Create the entity before creating this relationship."
+            )
 
         target_entity = store.get_entity_by_slug(target_slug, worker_id=worker_id)
         if target_entity is None:
-            return _err(f"Target entity not found: {target_slug!r}.")
+            return _err(
+                f"Target entity not found: {target_slug!r}. "
+                f"Create the entity before creating this relationship."
+            )
 
         # Resolve PascalCase entity types from kebab-case prefixes
         source_type_def = ontology.find_entity_type_for_slug(source_slug)
