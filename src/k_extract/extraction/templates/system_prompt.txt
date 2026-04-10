@@ -46,7 +46,7 @@ Read the job description provided to you. It contains your file assignments and 
 # Quality Rules
 
 - Do not create duplicate entities — always search before creating
-- Verify entity existence before creating relationships
+- Before creating any relationship, ensure both the source and target entities exist. If a target entity is referenced in your files but its source files are not in your current job, create a minimal stub entity with the properties you can infer from the reference (e.g., module path from an import statement, repository name from a URL). The stub will be enriched when the target's source files are processed. The relationship tool will reject relationships with missing endpoints.
 - Use consistent slug formatting
 - Process files one at a time — complete all steps for each file before moving to the next
 - Do not create custom scripts — use only the provided tools

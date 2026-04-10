@@ -1267,8 +1267,10 @@ class TestManageRelationshipCreate:
                 "mode": "create",
             }
         )
-        is_error, _ = _parse_result(result)
+        is_error, data = _parse_result(result)
         assert is_error
+        assert "product:nonexistent" in data
+        assert "Create" in data
 
     @pytest.mark.asyncio
     async def test_target_not_found(self, manage_relationship_fn, store):
@@ -1281,8 +1283,10 @@ class TestManageRelationshipCreate:
                 "mode": "create",
             }
         )
-        is_error, _ = _parse_result(result)
+        is_error, data = _parse_result(result)
         assert is_error
+        assert "product:nonexistent" in data
+        assert "Create" in data
 
     @pytest.mark.asyncio
     async def test_unknown_relationship_type(self, manage_relationship_fn, store):

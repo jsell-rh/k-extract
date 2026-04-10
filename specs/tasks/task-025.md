@@ -1,6 +1,6 @@
 # Task 025: Enforce referential integrity — no orphaned edges
 
-**Status:** `in-progress`
+**Status:** `ready-for-review`
 **Spec Reference:** specs/agent/agent-tools.md, specs/agent/prompt-generation.md, specs/agent/prompt-patterns.md
 **Branch:** task-025
 **PR:** #25
