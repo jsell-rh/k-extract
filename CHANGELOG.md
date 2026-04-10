@@ -2,6 +2,19 @@
 
 <!-- version list -->
 
+## v0.5.0 (2026-04-10)
+
+### Bug Fixes
+
+- **writer**: Deduplicate IDs at JSONL write time
+  ([`215a5b8`](https://github.com/jsell-rh/k-extract/commit/215a5b8bc7aeddade7bf8a33701748a327fa4a96))
+
+### Features
+
+- **cli**: Add --version flag
+  ([`fbf8707`](https://github.com/jsell-rh/k-extract/commit/fbf8707e09bc615614a9b304299c9160c5fbd305))
+
+
 ## v0.4.0 (2026-04-09)
 
 ### Bug Fixes

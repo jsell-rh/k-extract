@@ -1,6 +1,6 @@
 [project]
 name = "k-extract"
-version = "0.4.0"
+version = "0.5.0"
 description = "General-purpose knowledge graph extraction framework"
 readme = "README.md"
 requires-python = ">=3.12"
