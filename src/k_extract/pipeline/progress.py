@@ -253,10 +253,10 @@ def render_dashboard(progress: PipelineProgress) -> Group:
 
     # Per-source progress bars
     source_bar = Progress(
-        TextColumn("  {task.description}"),
+        TextColumn("  {task.description}", style="dim"),
         BarColumn(bar_width=30),
         MofNCompleteColumn(),
-        TextColumn("jobs"),
+        TextColumn("jobs", style="dim"),
         expand=False,
     )
     for source_name in progress._source_order:
