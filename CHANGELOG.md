@@ -2,6 +2,22 @@
 
 <!-- version list -->
 
+## v0.4.0 (2026-04-09)
+
+### Bug Fixes
+
+- **process**: Add checklist item 59 — API replacement behavioral completeness
+  ([`e3a14e0`](https://github.com/jsell-rh/k-extract/commit/e3a14e0248d368944ceb64f19b1f7a6cde4aed43))
+
+- **task-024**: Resume accuracy — pass initial completed/failed counts to register_sources
+  ([`2cab47e`](https://github.com/jsell-rh/k-extract/commit/2cab47eec27d7f879f435f7f2b8110634b18baf5))
+
+### Features
+
+- **task-024**: N+1 progress bars with per-source tracking
+  ([`45e4d11`](https://github.com/jsell-rh/k-extract/commit/45e4d11d7a3e35c8c7cb95dc635122e114473e95))
+
+
 ## v0.3.0 (2026-04-09)
 
 ### Features
