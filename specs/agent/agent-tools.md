@@ -167,8 +167,8 @@ If a match is found, the tool returns the existing entity with a message indicat
 
 ### Create Mode
 
-1. Resolve source and target entity types by scanning all entity types for the given slugs. Error if either slug not found.
-2. Construct composite key: `SourceType|REFERENCES|TargetType`.
+1. **Verify both endpoints exist.** Resolve source and target entity types by scanning all entity types (shared store + staging area) for the given slugs. **If either slug is not found, return an error** telling the agent to create the missing entity first. The tool MUST NOT accept a relationship with missing endpoints — this is the enforcement point for preventing orphaned edges in the JSONL output.
+2. Construct composite key: `SourceType|RELATIONSHIP_TYPE|TargetType`.
 3. Validate composite key exists in the relationship ontology schema.
 4. Check for existing relationship with same source+target+type in the virtual view (shared store + staging area). **If it already exists, return the existing relationship** — do not emit a duplicate CREATE. The agent can use edit mode if properties need changing.
 5. Generate the deterministic edge ID from the start_id, edge label, and end_id (via kartograph's `EntityIdGenerator.generate_edge_id`).
@@ -185,6 +185,7 @@ If a match is found, the tool returns the existing entity with a message indicat
 
 ### Generalizable Requirements
 
+- **Referential integrity at the tool level.** The tool rejects any relationship where either endpoint does not exist in the virtual view (shared store + staging area). This guarantees no orphaned edges in the output. The agent must create both endpoints before creating the relationship.
 - **Entity type auto-detection.** Source and target types are resolved from slugs, not specified by the agent. This simplifies the agent's job.
 - **Composite key validation.** The relationship type (source_type, rel_type, target_type triple) must exist in the ontology schema. No new relationship types can be created at runtime.
 - **Duplicate prevention.** Creating a relationship that already exists returns the existing relationship instead of erroring or emitting a duplicate. This is the enforcement point for unique IDs in the JSONL output.
